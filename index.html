@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Biological Age &amp; Medicine 3.0 Survival Model — Mohammed KM</title>
+    <meta
+      name="description"
+      content="Interactive client-side implementation of the Levine et al. (2018) PhenoAge Gompertz proportional-hazards biological age and 10-year survival model."
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="masthead">
+        <div class="masthead-top">
+          <div class="eyebrow-group">
+            <span class="eyebrow-pill">Medicine 3.0 Quantitative Modeling</span>
+            <span class="privacy-pill">
+              <span class="status-dot" aria-hidden="true"></span>
+              100% Client-Side Math &mdash; Zero Data Sent or Stored
+            </span>
+          </div>
+          <div class="unit-toggle" role="group" aria-label="Laboratory Unit System">
+            <button type="button" class="unit-btn active" data-unit="SI" aria-pressed="true">
+              SI Units <span class="unit-sub">mmol/L, g/L, umol/L, mg/L</span>
+            </button>
+            <button type="button" class="unit-btn" data-unit="US" aria-pressed="false">
+              US Units <span class="unit-sub">mg/dL, g/dL</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="masthead-title-row">
+          <div>
+            <h1>Biological Age &amp; Medicine 3.0 Survival Model</h1>
+            <p class="subtitle">
+              Exact Levine et al. (2018, <em>Aging</em>) PhenoAge Gompertz proportional-hazards
+              framework across chronological age and 9 routine clinical biomarkers.
+              <span class="byline">By Mohammed KM</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="disclaimer-banner" role="note" aria-label="Medical Disclaimer">
+          <strong>Educational &amp; Research Model Only:</strong>
+          This interactive calculator implements a published epidemiological survival model
+          (NHANES III &amp; IV linked mortality cohorts) for educational exploration. It is not a
+          medical device, does not diagnose or treat disease, and does not substitute for clinical
+          evaluation by a licensed physician.
+        </div>
+      </header>
+
+      <main class="main-content">
+        <!-- Preset Cohort Selector -->
+        <section class="preset-bar" aria-label="Reference Cohort Presets">
+          <div class="preset-bar-header">
+            <span class="section-kicker">Cohort Reference Profiles</span>
+            <span class="preset-hint">Select a benchmark profile or adjust any biomarker directly</span>
+          </div>
+          <div class="preset-grid" id="preset-grid"></div>
+        </section>
+
+        <!-- Primary Outcomes & Gompertz Survival Curve -->
+        <section class="hero-grid" aria-label="Primary Survival Outcomes">
+          <div class="kpi-panel">
+            <div class="kpi-primary">
+              <div class="kpi-label">Phenotypic Biological Age (PhenoAge)</div>
+              <div class="kpi-value-row">
+                <span class="kpi-hero-number" id="out-phenoage">--</span>
+                <span class="kpi-hero-unit">years</span>
+              </div>
+              <div class="kpi-meta" id="out-chrono-compare">
+                vs. Chronological Age -- years
+              </div>
+            </div>
+
+            <div class="kpi-secondary-grid">
+              <div class="kpi-stat">
+                <div class="kpi-label">Biological Age Acceleration</div>
+                <div class="kpi-stat-value" id="out-accel">--</div>
+                <div class="kpi-badge" id="out-accel-badge">--</div>
+              </div>
+
+              <div class="kpi-stat">
+                <div class="kpi-label">10-Year All-Cause Mortality (M)</div>
+                <div class="kpi-stat-value" id="out-mortality">--</div>
+                <div class="kpi-sub" id="out-mortality-ref">Baseline ref: --</div>
+              </div>
+
+              <div class="kpi-stat">
+                <div class="kpi-label">Relative Mortality Hazard</div>
+                <div class="kpi-stat-value" id="out-hr">--</div>
+                <div class="kpi-sub">vs. chronological-age baseline</div>
+              </div>
+
+              <div class="kpi-stat">
+                <div class="kpi-label">Gompertz Linear Predictor (xb)</div>
+                <div class="kpi-stat-value mono" id="out-xb">--</div>
+                <div class="kpi-sub">Exact proportional-hazards score</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="chart-panel">
+            <div class="panel-header">
+              <div>
+                <div class="section-kicker">10-Year Gompertz Survival Trajectory</div>
+                <h2>Projected Survival Probability S(t)</h2>
+              </div>
+              <div class="chart-legend">
+                <span class="legend-item"><span class="swatch swatch-current"></span>Current Profile</span>
+                <span class="legend-item"><span class="swatch swatch-baseline"></span>Age-Matched Baseline</span>
+                <span class="legend-item"><span class="swatch swatch-optimal"></span>Optimal Target</span>
+              </div>
+            </div>
+            <div class="survival-chart-wrap" id="survival-chart"></div>
+            <p class="chart-footnote">
+              Survival curve computed from Gompertz hazard S(t) = exp(-((exp(gamma * 12t) - 1) / gamma) * exp(xb)),
+              with gamma = 0.0076927 month<sup>-1</sup> over 120 months.
+            </p>
+          </div>
+        </section>
+
+        <!-- Main Workspace: Biomarker Controls + Modifiable Leverage Tornado -->
+        <section class="workspace-grid">
+          <!-- Left: Chronological Age & 9 Biomarkers -->
+          <div class="panel biomarkers-panel">
+            <div class="panel-header">
+              <div>
+                <div class="section-kicker">Clinical Panel Inputs</div>
+                <h2>Chronological Age &amp; 9 Routine Biomarkers</h2>
+              </div>
+              <button type="button" class="ghost-btn" id="btn-apply-all-optimal">
+                Set All to Optimal Target
+              </button>
+            </div>
+
+            <!-- Chronological Age Control -->
+            <div class="age-control-card">
+              <div class="biomarker-top">
+                <div>
+                  <span class="bm-name">Chronological Age</span>
+                  <span class="bm-domain">Non-Modifiable Baseline Anchor</span>
+                </div>
+                <div class="bm-input-group">
+                  <input
+                    type="number"
+                    id="input-age"
+                    class="num-input"
+                    min="18"
+                    max="95"
+                    step="1"
+                    value="45"
+                    aria-label="Chronological Age in years"
+                  />
+                  <span class="unit-tag">yrs</span>
+                </div>
+              </div>
+              <input
+                type="range"
+                id="slider-age"
+                class="range-slider age-slider"
+                min="18"
+                max="95"
+                step="1"
+                value="45"
+                aria-label="Chronological Age slider"
+              />
+              <div class="slider-scale">
+                <span>18 yrs</span>
+                <span>Weight: +0.0804 per year</span>
+                <span>95 yrs</span>
+              </div>
+            </div>
+
+            <div class="biomarkers-list" id="biomarkers-list"></div>
+          </div>
+
+          <!-- Right: Modifiable Leverage Tornado Chart -->
+          <div class="panel tornado-panel">
+            <div class="panel-header">
+              <div>
+                <div class="section-kicker">Sensitivity &amp; Intervention Priority</div>
+                <h2>Modifiable Leverage Tornado Chart</h2>
+              </div>
+              <div class="tornado-summary-pill" id="tornado-total-pill">
+                Total modifiable: -- yrs
+              </div>
+            </div>
+            <p class="panel-intro">
+              Each bar quantifies the exact biological age reduction achieved by moving
+              <strong>only that single biomarker</strong> from its current value to its Medicine 3.0
+              optimal target, holding chronological age and all other markers constant. Click any
+              modifiable row to apply its target value.
+            </p>
+            <div class="tornado-chart" id="tornado-chart"></div>
+
+            <div class="medicine30-callout">
+              <div class="section-kicker">Medicine 3.0 Clinical Framing</div>
+              <h3>Why Population Reference Ranges Are Not Optimal Targets</h3>
+              <p>
+                Standard laboratory reference intervals (Medicine 2.0) typically span the central 95%
+                of an aging, metabolically heterogeneous population. Within those "normal" bounds,
+                small upward shifts in fasting glucose, RDW, hs-CRP, and leukocyte count compound
+                exponentially in the Gompertz mortality hazard. Medicine 3.0 shifts the objective from
+                late-stage disease detection to proactive risk-surface compression decades earlier.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Transparent Methodology & Live Mathematical Specification -->
+        <section class="panel methodology-panel" aria-label="Methodology and Citations">
+          <div class="panel-header">
+            <div>
+              <div class="section-kicker">Transparent Methodology</div>
+              <h2>Mathematical Specification &amp; Live Formula Audit</h2>
+            </div>
+            <span class="mono-badge">Levine et al., Aging 2018; 10(4):573-591</span>
+          </div>
+
+          <div class="formula-grid">
+            <div class="formula-card">
+              <div class="formula-step">1. Linear Predictor (xb)</div>
+              <pre class="formula-code">xb = -19.9067
+   - 0.0336 * Albumin (g/L)
+   + 0.0095 * Creatinine (umol/L)
+   + 0.1953 * Glucose (mmol/L)
+   + 0.0954 * ln(CRP in mg/dL)
+   - 0.0120 * Lymphocyte (%)
+   + 0.0268 * MCV (fL)
+   + 0.3306 * RDW (%)
+   + 0.00188 * ALP (U/L)
+   + 0.0554 * WBC (10^3/uL)
+   + 0.0804 * Age (years)</pre>
+              <div class="formula-live">
+                Current xb = <strong id="audit-xb">--</strong>
+              </div>
+            </div>
+
+            <div class="formula-card">
+              <div class="formula-step">2. 10-Year Mortality Score (M)</div>
+              <pre class="formula-code">M = 1 - exp( (-1.51714 * exp(xb)) / 0.0076927 )
+
+Where:
+  gamma = 0.0076927 month^-1
+  exp(120 * gamma) - 1 = 1.51714</pre>
+              <div class="formula-live">
+                Current M = <strong id="audit-m">--</strong>
+              </div>
+            </div>
+
+            <div class="formula-card">
+              <div class="formula-step">3. Phenotypic Age Conversion</div>
+              <pre class="formula-code">PhenoAge = 141.50225
+         + ln( -0.00553 * ln(1 - M) ) / 0.090165
+
+Age Acceleration = PhenoAge - Chronological Age</pre>
+              <div class="formula-live">
+                Current PhenoAge = <strong id="audit-phenoage">--</strong> yrs
+              </div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="coef-table">
+              <thead>
+                <tr>
+                  <th>Variable</th>
+                  <th>Model Unit</th>
+                  <th>Coefficient</th>
+                  <th>Current Input</th>
+                  <th>Contribution to xb</th>
+                  <th>Biological Mechanism</th>
+                </tr>
+              </thead>
+              <tbody id="coef-table-body"></tbody>
+            </table>
+          </div>
+
+          <div class="citations-block">
+            <h3>Primary Scientific Sources &amp; Data Provenance</h3>
+            <ol class="citations-list">
+              <li>
+                Levine ME, Lu AT, Quach A, Chen BH, Assimes TL, Bandinelli S, Hou L, Baccarelli AA,
+                Stewart JD, Li Y, Whitsel EA, Wilson JG, Reiner AP, Aviv A, Lohman K, Liu Y,
+                Ferrucci L, Horvath S. <em>An epigenetic biomarker of aging for lifespan and healthspan.</em>
+                Aging (Albany NY). 2018;10(4):573-591.
+                <a href="https://doi.org/10.18632/aging.101414" target="_blank" rel="noopener noreferrer">doi:10.18632/aging.101414</a>
+              </li>
+              <li>
+                Liu Z, Kuo PL, Horvath S, Crimmins E, Ferrucci L, Levine M.
+                <em>A new aging measure captures morbidity and mortality risk across diverse subpopulations from NHANES IV: A cohort study.</em>
+                PLOS Medicine. 2018;15(12):e1002718.
+                <a href="https://doi.org/10.1371/journal.pmed.1002718" target="_blank" rel="noopener noreferrer">doi:10.1371/journal.pmed.1002718</a>
+              </li>
+              <li>
+                Centers for Disease Control and Prevention (CDC), National Center for Health Statistics (NCHS).
+                <em>National Health and Nutrition Examination Survey (NHANES III &amp; Continuous NHANES) Linked Mortality Files.</em>
+                U.S. Department of Health and Human Services.
+              </li>
+            </ol>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div>
+          <strong>Biological Age &amp; Medicine 3.0 Survival Model</strong> &mdash; Built by Mohammed KM.
+        </div>
+        <div>
+          All computations run locally in your browser. Educational use only; not medical advice.
+        </div>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
