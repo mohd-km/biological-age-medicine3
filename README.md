@@ -11,11 +11,14 @@ A self-contained, 100% client-side interactive clinical-editorial web applicatio
 - **Cohort Reference Presets**: Compare *Optimal Longevity Profile*, *Average Adult (NHANES Baseline)*, and *Elevated Metabolic Risk* profiles at any chronological age.
 - **10-Year Gompertz Survival Curve**: Live SVG visualization of projected 10-year survival probability $S(t)$ against age-matched baseline and optimal Medicine 3.0 targets.
 - **Modifiable Leverage Tornado Chart**: Ranks all 9 modifiable biomarkers by the exact biological age reduction (in years) gained when moving each single marker toward its optimal range.
+- **Reproducible Python Validation & Sensitivity Script (v2)**: `analysis/nhanes_phenoage_validation.py` implements the exact Levine (2018) Gompertz equations, analytical and one-at-a-time sensitivity tables, Harrell's C-index concordance evaluator, and documented NHANES III/IV validation methodology with zero external dependencies.
 - **Zero Data Collection**: All calculations execute locally in the browser; no personal data is transmitted or persisted.
 
-## Development & Build
+## Development, Validation & Build
 
 ```bash
+python3 analysis/nhanes_phenoage_validation.py --verify
+python3 analysis/nhanes_phenoage_validation.py
 npm install
 npm test
 npm run build

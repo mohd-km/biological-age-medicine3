@@ -214,8 +214,8 @@
         <section class="panel methodology-panel" aria-label="Methodology and Citations">
           <div class="panel-header">
             <div>
-              <div class="section-kicker">Transparent Methodology</div>
-              <h2>Mathematical Specification &amp; Live Formula Audit</h2>
+              <div class="section-kicker">Transparent Methodology &amp; Validation</div>
+              <h2>Mathematical Specification, Equation Breakdown &amp; Live Audit</h2>
             </div>
             <span class="mono-badge">Levine et al., Aging 2018; 10(4):573-591</span>
           </div>
@@ -259,6 +259,76 @@ Where:
 Age Acceleration = PhenoAge - Chronological Age</pre>
               <div class="formula-live">
                 Current PhenoAge = <strong id="audit-phenoage">--</strong> yrs
+              </div>
+            </div>
+          </div>
+
+          <!-- Equation Breakdown & Validation Summary -->
+          <div class="v2-validation-grid">
+            <div class="equation-breakdown-card">
+              <div class="section-kicker">Equation Breakdown</div>
+              <h3>Gompertz Survival Mechanics &amp; Sensitivity Structure</h3>
+              <dl class="breakdown-list">
+                <div class="breakdown-row">
+                  <dt>Hazard Function h(t | x)</dt>
+                  <dd>
+                    <code>h(t | x) = exp(xb) * exp(gamma * t)</code> &mdash; instantaneous mortality hazard
+                    doubles roughly every <code>ln(2) / (12 * gamma) = 7.51</code> years of follow-up.
+                  </dd>
+                </div>
+                <div class="breakdown-row">
+                  <dt>Cumulative 10-Year Risk (M)</dt>
+                  <dd>
+                    Integrating <code>h(t | x)</code> over <code>t = 120</code> months yields
+                    <code>H(120) = 197.218 * exp(xb)</code> and survival <code>S(120) = exp(-H(120))</code>.
+                  </dd>
+                </div>
+                <div class="breakdown-row">
+                  <dt>Analytical Biomarker Sensitivity</dt>
+                  <dd>
+                    Because PhenoAge is linear in <code>xb</code>, each marker's exact biological-age slope is
+                    <code>d(PhenoAge) / dx_j = beta_j / 0.090165</code> (for example, <code>+1%</code> RDW adds
+                    <code>+3.67</code> yrs; <code>+1 mmol/L</code> glucose adds <code>+2.17</code> yrs;
+                    <code>+1 g/L</code> albumin removes <code>0.37</code> yrs).
+                  </dd>
+                </div>
+                <div class="breakdown-row">
+                  <dt>NHANES III &amp; IV Validation</dt>
+                  <dd>
+                    Trained on NHANES III (<code>n = 9,926</code>, 42-biomarker Cox elastic-net selection) and
+                    validated in NHANES IV (<code>n = 11,432</code>): all-cause mortality Harrell's C-index
+                    <strong>0.879</strong> vs. <strong>0.862</strong> for chronological age alone (10-year ROC AUC
+                    <strong>0.88</strong>; HR <strong>1.09</strong> per +1 yr PhenoAge acceleration).
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="github-inspect-card">
+              <div>
+                <div class="section-kicker">Reproducible Analysis &amp; Audit Code</div>
+                <h3>Inspect Survival Model &amp; Validation Code on GitHub</h3>
+                <p class="github-inspect-copy">
+                  Audit the standalone Python implementation of the Levine (2018) Gompertz proportional-hazards
+                  equations, analytical and one-at-a-time sensitivity tables, Harrell's C-index concordance
+                  evaluator, and documented NHANES III/IV validation methodology.
+                </p>
+                <ul class="github-meta-list">
+                  <li><code>analysis/nhanes_phenoage_validation.py</code> &mdash; zero-dependency Python 3 script</li>
+                  <li>Exact numerical parity check against client-side JS model (<code>&lt; 1e-9</code> tolerance)</li>
+                  <li>Reproducible seeded synthetic NHANES-calibrated C-index benchmark</li>
+                </ul>
+              </div>
+              <div class="github-cta-row">
+                <a
+                  class="github-cta-btn"
+                  href="https://github.com/mohd-km/biological-age-medicine3/blob/main/analysis/nhanes_phenoage_validation.py"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Inspect Survival Model &amp; Validation Code on GitHub
+                  <span class="cta-arrow" aria-hidden="true">&rarr;</span>
+                </a>
               </div>
             </div>
           </div>
