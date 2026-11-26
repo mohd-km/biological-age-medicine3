@@ -193,8 +193,8 @@ function renderSurvivalSvg(currentRes) {
   const yCeil = 1.0;
 
   const width = 560;
-  const height = 232;
-  const pad = { top: 16, right: 20, bottom: 34, left: 50 };
+  const height = 236;
+  const pad = { top: 16, right: 20, bottom: 34, left: 54 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
 
@@ -218,7 +218,7 @@ function renderSurvivalSvg(currentRes) {
       <line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${width - pad.right}" y2="${y.toFixed(1)}"
         stroke="rgba(232,226,213,0.09)" stroke-width="1" />
       <text x="${pad.left - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end"
-        fill="#8c9bae" font-size="11" font-family="JetBrains Mono, monospace">${(val * 100).toFixed(1)}%</text>
+        fill="#8c9bae" font-size="12" font-family="JetBrains Mono, monospace">${(val * 100).toFixed(1)}%</text>
     `;
   }
 
@@ -227,7 +227,7 @@ function renderSurvivalSvg(currentRes) {
     const x = xScale(yr);
     xTicks += `
       <text x="${x.toFixed(1)}" y="${height - 10}" text-anchor="middle"
-        fill="#8c9bae" font-size="11" font-family="JetBrains Mono, monospace">Yr ${yr}</text>
+        fill="#8c9bae" font-size="12" font-family="JetBrains Mono, monospace">Yr ${yr}</text>
     `;
   }
 
@@ -235,7 +235,7 @@ function renderSurvivalSvg(currentRes) {
   const endOpt = optimalCurve[10];
 
   survivalChartEl.innerHTML = `
-    <svg class="survival-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="10-year Gompertz survival curve">
+    <svg class="survival-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="10-year Gompertz survival curve">
       <defs>
         <linearGradient id="tealAreaGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="#4fd1c5" stop-opacity="0.22" />
