@@ -5,6 +5,8 @@ import {
   PRESETS,
   calculatePhenoAge,
   computeTornadoLeverage,
+  computeWhatIfOptimizer,
+  generateDoctorSummaryMarkdown,
   generateSurvivalCurve,
 } from './phenoage.js';
 
@@ -97,4 +99,36 @@ test('survival curve starts at 1.0 and ends at 1 - M at year 10', () => {
   assert.equal(curve.length, 11);
   assert.equal(curve[0].survival, 1);
   assert.ok(Math.abs(curve[10].mortality - res.mortality10Yr) < 1e-5);
+});
+
+test('what-if optimizer computes exact 3-marker shift to drop 3 biological years', () => {
+  const plan = computeWhatIfOptimizer(PRESETS.average.values, 3.0, 3);
+  assert.equal(plan.alreadyOptimal, false);
+  assert.equal(plan.isFullyAchievable, true);
+  assert.equal(plan.shifts.length, 3);
+  assert.ok(
+    Math.abs(plan.achievedDropYears - 3.0) < 1e-6,
+    `Expected exact 3.0 yr drop, got ${plan.achievedDropYears}`
+  );
+  const recheck = calculatePhenoAge(plan.projectedInputs);
+  assert.ok(
+    Math.abs(recheck.phenoAge - plan.projectedPhenoAge) < 1e-9,
+    'Projected PhenoAge must match recalculated projected inputs'
+  );
+
+  const optPlan = computeWhatIfOptimizer(PRESETS.optimal.values, 3.0, 3);
+  assert.equal(optPlan.alreadyOptimal, true);
+  assert.equal(optPlan.shifts.length, 0);
+});
+
+test('doctor summary markdown includes key metrics, biomarkers, and disclaimer', () => {
+  const res = calculatePhenoAge(PRESETS.average.values);
+  const plan = computeWhatIfOptimizer(PRESETS.average.values, 3.0, 3);
+  const md = generateDoctorSummaryMarkdown(PRESETS.average.values, res, plan, 'US');
+  assert.ok(md.includes('# Biological Age (PhenoAge) Discussion Summary'));
+  assert.ok(md.includes(res.phenoAge.toFixed(1)));
+  assert.ok(md.includes('Private "What-If" Optimizer'));
+  assert.ok(md.includes('Fasting Glucose'));
+  assert.ok(md.includes('mg/dL'));
+  assert.ok(md.includes('Educational and research summary only'));
 });

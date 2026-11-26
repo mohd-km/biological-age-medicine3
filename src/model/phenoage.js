@@ -500,3 +500,157 @@ export function getBiomarkerStatus(bm, canonicalValue) {
     return { code: 'elevated', label: 'Suboptimal' };
   }
 }
+
+/**
+ * Private "What-If" Optimizer:
+ * Computes the exact shifts across up to `maxMarkers` (default 3) highest-leverage
+ * biomarkers needed to drop biological age by `targetDropYears` (default 3.0 yrs).
+ *
+ * Uses proportional scaling in linear-predictor (xb) space toward each marker's
+ * Medicine 3.0 optimal target, handling ln(CRP) analytically so the resulting
+ * PhenoAge drop is mathematically exact whenever achievable within optimal bounds.
+ */
+export function computeWhatIfOptimizer(inputs, targetDropYears = 3.0, maxMarkers = 3) {
+  const tornado = computeTornadoLeverage(inputs);
+  const base = tornado.base;
+
+  const modifiable = tornado.items.filter((item) => item.reductionYears >= 0.05);
+  const selected = modifiable.slice(0, maxMarkers);
+
+  const maxAchievableYears = selected.reduce((sum, item) => sum + item.reductionYears, 0);
+
+  if (selected.length === 0 || maxAchievableYears < 0.05) {
+    return {
+      targetDropYears,
+      achievedDropYears: 0,
+      isFullyAchievable: false,
+      alreadyOptimal: true,
+      basePhenoAge: base.phenoAge,
+      projectedPhenoAge: base.phenoAge,
+      projectedXb: base.xb,
+      projectedMortality10Yr: base.mortality10Yr,
+      projectedInputs: { ...inputs },
+      shifts: [],
+    };
+  }
+
+  const scale = Math.min(1, targetDropYears / maxAchievableYears);
+  const projectedInputs = { ...inputs };
+  const shifts = [];
+
+  for (const item of selected) {
+    const bm = item.biomarker;
+    const curVal = inputs[bm.key];
+    const optVal = bm.optimal;
+
+    let targetVal;
+    if (bm.isLog) {
+      const lnCur = Math.log(Math.max(curVal, 0.001));
+      const lnOpt = Math.log(Math.max(optVal, 0.001));
+      targetVal = Math.exp(lnCur + scale * (lnOpt - lnCur));
+    } else {
+      targetVal = curVal + scale * (optVal - curVal);
+    }
+
+    projectedInputs[bm.key] = targetVal;
+    shifts.push({
+      key: bm.key,
+      name: bm.name,
+      shortName: bm.shortName,
+      domain: bm.domain,
+      currentVal: curVal,
+      targetVal,
+      optimalVal: optVal,
+      dropYears: item.reductionYears * scale,
+      biomarker: bm,
+    });
+  }
+
+  const projected = calculatePhenoAge(projectedInputs);
+  const achievedDropYears = Math.max(0, base.phenoAge - projected.phenoAge);
+
+  return {
+    targetDropYears,
+    achievedDropYears,
+    isFullyAchievable: maxAchievableYears + 1e-6 >= targetDropYears,
+    alreadyOptimal: false,
+    basePhenoAge: base.phenoAge,
+    projectedPhenoAge: projected.phenoAge,
+    projectedXb: projected.xb,
+    projectedMortality10Yr: projected.mortality10Yr,
+    projectedInputs,
+    shifts,
+  };
+}
+
+/**
+ * Generates a 100% client-side private Markdown clinical discussion summary
+ * for downloading or sharing with a physician.
+ */
+export function generateDoctorSummaryMarkdown(inputs, result, optimizerPlan, unitSystem = 'SI') {
+  const today = new Date().toISOString().slice(0, 10);
+  const sign = result.ageAcceleration >= 0 ? '+' : '';
+  const lines = [
+    `# Biological Age (PhenoAge) Discussion Summary`,
+    ``,
+    `- **Date:** ${today}`,
+    `- **Model:** Levine et al. (2018) PhenoAge Gompertz Proportional-Hazards Model (*Aging* 10(4):573-591, doi:10.18632/aging.101414)`,
+    `- **Privacy:** Computed 100% locally in browser; no values transmitted or stored.`,
+    `- **Unit System:** ${unitSystem}`,
+    ``,
+    `## Summary Outcomes`,
+    ``,
+    `| Metric | Value |`,
+    `| --- | --- |`,
+    `| Chronological Age | ${inputs.age.toFixed(1)} years |`,
+    `| Phenotypic Biological Age (PhenoAge) | **${result.phenoAge.toFixed(1)} years** |`,
+    `| Age Acceleration | **${sign}${result.ageAcceleration.toFixed(1)} years** |`,
+    `| 10-Year All-Cause Mortality Score (M) | ${(result.mortality10Yr * 100).toFixed(2)}% (age-matched ref: ${(result.mortality10YrRef * 100).toFixed(2)}%) |`,
+    `| Relative Hazard vs. Age-Matched Baseline | ${result.hazardRatioVsBaseline.toFixed(2)}x |`,
+    `| Linear Predictor (xb) | ${result.xb.toFixed(4)} |`,
+    ``,
+    `## Current Biomarker Panel`,
+    ``,
+    `| Biomarker | Domain | Current | Optimal Target | Status |`,
+    `| --- | --- | --- | --- | --- |`,
+  ];
+
+  for (const bm of BIOMARKERS) {
+    const unit = getBiomarkerUnit(bm, unitSystem);
+    const cur = formatBiomarkerValue(bm, inputs[bm.key], unitSystem);
+    const opt = formatBiomarkerValue(bm, bm.optimal, unitSystem);
+    const status = getBiomarkerStatus(bm, inputs[bm.key]).label;
+    lines.push(`| ${bm.name} | ${bm.domain} | ${cur} ${unit} | ${opt} ${unit} | ${status} |`);
+  }
+
+  lines.push(``);
+  lines.push(`## Private "What-If" Optimizer (-${optimizerPlan.targetDropYears.toFixed(0)} yr Target)`);
+  lines.push(``);
+
+  if (optimizerPlan.alreadyOptimal || optimizerPlan.shifts.length === 0) {
+    lines.push(
+      `All 9 biomarkers are already at or near Medicine 3.0 optimal targets. No high-leverage shifts remain.`
+    );
+  } else {
+    lines.push(
+      `Projected PhenoAge: **${optimizerPlan.projectedPhenoAge.toFixed(1)} years** (-${optimizerPlan.achievedDropYears.toFixed(2)} yrs; 10-yr mortality ${(optimizerPlan.projectedMortality10Yr * 100).toFixed(2)}%).`
+    );
+    lines.push(``);
+    lines.push(`| Priority | Biomarker | Current | Suggested Target | Biological Age Impact |`);
+    lines.push(`| --- | --- | --- | --- | --- |`);
+    optimizerPlan.shifts.forEach((s, idx) => {
+      const unit = getBiomarkerUnit(s.biomarker, unitSystem);
+      const cur = formatBiomarkerValue(s.biomarker, s.currentVal, unitSystem);
+      const tgt = formatBiomarkerValue(s.biomarker, s.targetVal, unitSystem);
+      lines.push(`| #${idx + 1} | ${s.name} | ${cur} ${unit} | ${tgt} ${unit} | -${s.dropYears.toFixed(2)} yrs |`);
+    });
+  }
+
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(
+    `*Educational and research summary only. Not a medical device or clinical diagnosis. Discuss lab targets and any interventions with a licensed physician.*`
+  );
+
+  return lines.join('\n');
+}

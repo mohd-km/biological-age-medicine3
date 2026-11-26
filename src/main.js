@@ -5,7 +5,9 @@ import {
   PRESETS,
   calculatePhenoAge,
   computeTornadoLeverage,
+  computeWhatIfOptimizer,
   formatBiomarkerValue,
+  generateDoctorSummaryMarkdown,
   generateSurvivalCurve,
   getBiomarkerStatus,
   getBiomarkerUnit,
@@ -15,16 +17,35 @@ import nhanesValidation from './data/nhanes_validation_results.json';
 const state = {
   unitSystem: 'SI', // 'SI' or 'US'
   activePreset: 'average',
+  targetDropYears: 3,
+  previousInputsForUndo: null,
   inputs: { ...PRESETS.average.values },
+};
+
+// Smooth gauge animation state
+const gaugeAnim = {
+  currentPhenoAge: null,
+  targetPhenoAge: null,
+  rafId: null,
 };
 
 // DOM References
 const presetGridEl = document.getElementById('preset-grid');
+const bioageGaugeEl = document.getElementById('bioage-gauge');
 const biomarkersListEl = document.getElementById('biomarkers-list');
 const tornadoChartEl = document.getElementById('tornado-chart');
 const tornadoTotalPillEl = document.getElementById('tornado-total-pill');
 const survivalChartEl = document.getElementById('survival-chart');
 const coefTableBodyEl = document.getElementById('coef-table-body');
+
+const optimizerHeadingEl = document.getElementById('optimizer-heading');
+const optimizerSummaryEl = document.getElementById('optimizer-summary');
+const optimizerShiftsEl = document.getElementById('optimizer-shifts');
+const btnApplyOptimizer = document.getElementById('btn-apply-optimizer');
+const btnUndoOptimizer = document.getElementById('btn-undo-optimizer');
+const btnDownloadMd = document.getElementById('btn-download-md');
+const btnPrintSummary = document.getElementById('btn-print-summary');
+const printDoctorSummaryEl = document.getElementById('print-doctor-summary');
 
 const valSummaryLeadEl = document.getElementById('val-summary-lead');
 const valMetricsListEl = document.getElementById('val-metrics-list');
@@ -35,8 +56,6 @@ const inputAgeEl = document.getElementById('input-age');
 const sliderAgeEl = document.getElementById('slider-age');
 const btnApplyAllOptimal = document.getElementById('btn-apply-all-optimal');
 
-const outPhenoAgeEl = document.getElementById('out-phenoage');
-const outChronoCompareEl = document.getElementById('out-chrono-compare');
 const outAccelEl = document.getElementById('out-accel');
 const outAccelBadgeEl = document.getElementById('out-accel-badge');
 const outMortalityEl = document.getElementById('out-mortality');
@@ -44,12 +63,165 @@ const outMortalityRefEl = document.getElementById('out-mortality-ref');
 const outHrEl = document.getElementById('out-hr');
 const outXbEl = document.getElementById('out-xb');
 
+const drawerMathPillEl = document.getElementById('drawer-math-pill');
 const auditXbEl = document.getElementById('audit-xb');
 const auditMEl = document.getElementById('audit-m');
 const auditPhenoAgeEl = document.getElementById('audit-phenoage');
 
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
+}
+
+function polarToCartesian(cx, cy, r, angleDeg) {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  return {
+    x: cx + r * Math.cos(rad),
+    y: cy + r * Math.sin(rad),
+  };
+}
+
+function describeArc(cx, cy, r, startAngle, endAngle) {
+  const start = polarToCartesian(cx, cy, r, endAngle);
+  const end = polarToCartesian(cx, cy, r, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+  return `M ${start.x.toFixed(2)} ${start.y.toFixed(2)} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
+}
+
+function drawBioAgeGauge(displayedPhenoAge, chronoAge) {
+  const accel = displayedPhenoAge - chronoAge;
+  const minDelta = -15;
+  const maxDelta = 15;
+  const clampedDelta = clamp(accel, minDelta, maxDelta);
+
+  // 220-degree editorial arc: -110 deg (left, -15 yrs) to +110 deg (right, +15 yrs)
+  const startDeg = -110;
+  const endDeg = 110;
+  const angleForDelta = (d) => startDeg + ((d - minDelta) / (maxDelta - minDelta)) * (endDeg - startDeg);
+
+  const needleDeg = angleForDelta(clampedDelta);
+  const cx = 180;
+  const cy = 156;
+  const radius = 116;
+
+  // Color based on acceleration zone
+  let accentStroke = '#1b5e43'; // Forest green (decelerated)
+  if (accel > 2.0) {
+    accentStroke = '#a33636'; // Muted crimson (accelerated)
+  } else if (accel > -2.0) {
+    accentStroke = '#8f5814'; // Warm amber (near baseline)
+  }
+
+  // Arc segments for subtle zones
+  const greenEnd = angleForDelta(-2);
+  const amberEnd = angleForDelta(2);
+
+  // Active sweep from 0 (chronological baseline, top 0 deg) to needleDeg
+  const sweepStart = Math.min(0, needleDeg);
+  const sweepEnd = Math.max(0, needleDeg);
+  const hasSweep = Math.abs(sweepEnd - sweepStart) > 0.5;
+
+  const needleTip = polarToCartesian(cx, cy, radius - 14, needleDeg);
+  const needleBaseL = polarToCartesian(cx, cy, 8, needleDeg - 90);
+  const needleBaseR = polarToCartesian(cx, cy, 8, needleDeg + 90);
+
+  const chronoTickOuter = polarToCartesian(cx, cy, radius + 11, 0);
+  const chronoTickInner = polarToCartesian(cx, cy, radius - 11, 0);
+
+  const ticks = [-15, -10, -5, 0, 5, 10, 15]
+    .map((d) => {
+      const a = angleForDelta(d);
+      const p1 = polarToCartesian(cx, cy, radius - 6, a);
+      const p2 = polarToCartesian(cx, cy, radius + 6, a);
+      const lbl = polarToCartesian(cx, cy, radius + 22, a);
+      const text = d === 0 ? `${chronoAge.toFixed(0)}` : `${d > 0 ? '+' : ''}${d}`;
+      return `
+        <line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}"
+          stroke="${d === 0 ? '#111111' : '#b8b8b3'}" stroke-width="${d === 0 ? 2 : 1.2}" />
+        <text x="${lbl.x.toFixed(1)}" y="${(lbl.y + 4).toFixed(1)}" text-anchor="middle"
+          fill="${d === 0 ? '#111111' : '#6b6b68'}" font-size="11.5" font-weight="${d === 0 ? 600 : 400}"
+          font-family="JetBrains Mono, monospace">${text}</text>
+      `;
+    })
+    .join('');
+
+  const sign = accel >= 0 ? '+' : '';
+
+  bioageGaugeEl.innerHTML = `
+    <svg class="gauge-svg" viewBox="0 0 360 236" role="img" aria-label="Biological age gauge showing ${displayedPhenoAge.toFixed(1)} years versus chronological age ${chronoAge.toFixed(0)} years">
+      <!-- Zone track arcs -->
+      <path d="${describeArc(cx, cy, radius, startDeg, greenEnd)}" fill="none" stroke="#dceee4" stroke-width="14" stroke-linecap="butt" />
+      <path d="${describeArc(cx, cy, radius, greenEnd, amberEnd)}" fill="none" stroke="#f5ead7" stroke-width="14" stroke-linecap="butt" />
+      <path d="${describeArc(cx, cy, radius, amberEnd, endDeg)}" fill="none" stroke="#f5dede" stroke-width="14" stroke-linecap="butt" />
+
+      <!-- Active deviation sweep from chronological age -->
+      ${
+        hasSweep
+          ? `<path d="${describeArc(cx, cy, radius, sweepStart, sweepEnd)}" fill="none" stroke="${accentStroke}" stroke-width="14" stroke-linecap="round" />`
+          : ''
+      }
+
+      <!-- Scale ticks -->
+      ${ticks}
+
+      <!-- Chronological anchor marker -->
+      <line x1="${chronoTickInner.x.toFixed(1)}" y1="${chronoTickInner.y.toFixed(1)}"
+        x2="${chronoTickOuter.x.toFixed(1)}" y2="${chronoTickOuter.y.toFixed(1)}"
+        stroke="#111111" stroke-width="2.4" stroke-linecap="round" />
+
+      <!-- Animated Needle -->
+      <polygon points="${needleTip.x.toFixed(1)},${needleTip.y.toFixed(1)} ${needleBaseL.x.toFixed(1)},${needleBaseL.y.toFixed(1)} ${needleBaseR.x.toFixed(1)},${needleBaseR.y.toFixed(1)}"
+        fill="${accentStroke}" opacity="0.22" />
+      <line x1="${cx}" y1="${cy}" x2="${needleTip.x.toFixed(1)}" y2="${needleTip.y.toFixed(1)}"
+        stroke="${accentStroke}" stroke-width="3" stroke-linecap="round" />
+      <circle cx="${cx}" cy="${cy}" r="6" fill="#ffffff" stroke="${accentStroke}" stroke-width="3" />
+
+      <!-- Center Digital Readout -->
+      <text x="${cx}" y="${cy + 36}" text-anchor="middle" fill="#111111"
+        font-size="38" font-weight="500" font-family="JetBrains Mono, monospace">${displayedPhenoAge.toFixed(1)}</text>
+      <text x="${cx}" y="${cy + 55}" text-anchor="middle" fill="#555555"
+        font-size="12" font-family="Inter, sans-serif">PhenoAge yrs &middot; vs. ${chronoAge.toFixed(0)} chrono (${sign}${accel.toFixed(1)})</text>
+    </svg>
+  `;
+}
+
+function animateBioAgeGauge(targetPhenoAge, chronoAge) {
+  if (gaugeAnim.currentPhenoAge === null) {
+    gaugeAnim.currentPhenoAge = targetPhenoAge;
+    gaugeAnim.targetPhenoAge = targetPhenoAge;
+    drawBioAgeGauge(targetPhenoAge, chronoAge);
+    return;
+  }
+
+  gaugeAnim.targetPhenoAge = targetPhenoAge;
+  if (gaugeAnim.rafId) {
+    cancelAnimationFrame(gaugeAnim.rafId);
+  }
+
+  const startVal = gaugeAnim.currentPhenoAge;
+  const delta = targetPhenoAge - startVal;
+  if (Math.abs(delta) < 0.02) {
+    gaugeAnim.currentPhenoAge = targetPhenoAge;
+    drawBioAgeGauge(targetPhenoAge, chronoAge);
+    return;
+  }
+
+  const duration = 260;
+  const startTime = performance.now();
+
+  const step = (now) => {
+    const t = Math.min(1, (now - startTime) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    const val = startVal + delta * eased;
+    gaugeAnim.currentPhenoAge = val;
+    drawBioAgeGauge(val, chronoAge);
+    if (t < 1) {
+      gaugeAnim.rafId = requestAnimationFrame(step);
+    } else {
+      gaugeAnim.rafId = null;
+    }
+  };
+
+  gaugeAnim.rafId = requestAnimationFrame(step);
 }
 
 function renderNhanesValidation() {
@@ -62,7 +234,7 @@ function renderNhanesValidation() {
   valSummaryLeadEl.textContent =
     `Independent evaluation across ${src.cycles.length} public CDC NHANES cycles (${cycleSpan}), ` +
     `covering n = ${cohort.n.toLocaleString('en-US')} complete-case adults (ages ${cohort.age_min}-${cohort.age_max}) ` +
-    `linked to the NCHS 2019 Public-Use Linked Mortality Files.`;
+    `linked to NCHS 2019 Public-Use Linked Mortality Files.`;
 
   valMetricsListEl.innerHTML = `
     <div class="breakdown-row">
@@ -81,31 +253,26 @@ function renderNhanesValidation() {
       <dd>
         PhenoAge <strong>${full.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age alone
         <strong>${full.c_index_chrono_age.toFixed(4)}</strong>
-        (<strong>+${full.c_index_delta.toFixed(4)}</strong> concordance gain on observed all-cause mortality).
+        (<strong>+${full.c_index_delta.toFixed(4)}</strong> concordance gain).
       </dd>
     </div>
     <div class="breakdown-row">
       <dt>Harrell's C-Index (10-Year Window)</dt>
       <dd>
-        Censored at 120 months to match the model's 10-year horizon: PhenoAge
-        <strong>${ten.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age alone
-        <strong>${ten.c_index_chrono_age.toFixed(4)}</strong>
-        (<strong>+${ten.c_index_delta.toFixed(4)}</strong>).
+        Censored at 120 months: PhenoAge <strong>${ten.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age
+        <strong>${ten.c_index_chrono_age.toFixed(4)}</strong> (<strong>+${ten.c_index_delta.toFixed(4)}</strong>).
       </dd>
     </div>
     <div class="breakdown-row">
       <dt>Mid-Life Subgroup (Ages 50-65, n = ${mid.n.toLocaleString('en-US')}, ${mid.deaths.toLocaleString('en-US')} deaths)</dt>
       <dd>
-        Where chronological age has narrow spread, PhenoAge achieves C-index
-        <strong>${mid.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age
-        <strong>${mid.c_index_chrono_age.toFixed(4)}</strong>
-        (<strong>+${mid.c_index_delta.toFixed(4)}</strong>).
+        PhenoAge achieves C-index <strong>${mid.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age
+        <strong>${mid.c_index_chrono_age.toFixed(4)}</strong> (<strong>+${mid.c_index_delta.toFixed(4)}</strong>).
       </dd>
     </div>
     <div class="breakdown-row">
       <dt>Analytical Biomarker Sensitivity</dt>
       <dd>
-        Because PhenoAge is linear in <code>xb</code>, each marker's biological-age slope is
         <code>d(PhenoAge) / dx_j = beta_j / 0.090165</code>: <code>+1%</code> RDW adds
         <code>+3.67</code> yrs, <code>+1 mmol/L</code> glucose adds <code>+2.17</code> yrs, and
         <code>+1 g/L</code> albumin subtracts <code>0.37</code> yrs.
@@ -135,6 +302,12 @@ function renderNhanesValidation() {
 
 function renderPresets() {
   presetGridEl.innerHTML = '';
+  const shortDesc = {
+    optimal: 'Low inflammation, tight glycemia, high albumin.',
+    average: 'Mid-life adult inside standard clinical intervals.',
+    elevated: 'Elevated glucose, hs-CRP, RDW, and leukocytes.',
+  };
+
   for (const preset of Object.values(PRESETS)) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -145,10 +318,11 @@ function renderPresets() {
         <span class="preset-title">${preset.label}</span>
         <span class="preset-tag">${preset.tag}</span>
       </div>
-      <div class="preset-desc">${preset.description}</div>
+      <div class="preset-desc">${shortDesc[preset.id] || preset.description}</div>
     `;
     btn.addEventListener('click', () => {
       state.activePreset = preset.id;
+      state.previousInputsForUndo = null;
       state.inputs = { ...preset.values, age: state.inputs.age };
       renderAll();
     });
@@ -178,8 +352,7 @@ function buildBiomarkerControls() {
     card.innerHTML = `
       <div class="biomarker-top">
         <div class="bm-title-group">
-          <span class="bm-name">${bm.name}</span>
-          <span class="bm-domain">${bm.domain}</span>
+          <span class="bm-name">${bm.shortName}</span>
           <span class="bm-status ${status.code}" data-role="status">${status.label}</span>
         </div>
         <div class="bm-input-group">
@@ -210,9 +383,9 @@ function buildBiomarkerControls() {
         />
       </div>
       <div class="slider-scale">
-        <span>${formatBiomarkerValue(bm, bm.min, state.unitSystem)} ${unit}</span>
-        <span class="slider-opt-label">Target: ${optDisp} ${unit}</span>
-        <span>${formatBiomarkerValue(bm, bm.max, state.unitSystem)} ${unit}</span>
+        <span>${formatBiomarkerValue(bm, bm.min, state.unitSystem)}</span>
+        <span class="slider-opt-label">Opt: ${optDisp} ${unit}</span>
+        <span>${formatBiomarkerValue(bm, bm.max, state.unitSystem)}</span>
       </div>
     `;
 
@@ -225,6 +398,7 @@ function buildBiomarkerControls() {
       const canonical = state.unitSystem === 'US' ? bm.fromUS(parsed) : bm.fromSI(parsed);
       state.inputs[bm.key] = clamp(canonical, bm.min, bm.max);
       state.activePreset = null;
+      state.previousInputsForUndo = null;
 
       if (source !== 'number') {
         numInput.value = formatBiomarkerValue(bm, state.inputs[bm.key], state.unitSystem);
@@ -259,13 +433,17 @@ function updatePresetActiveClass() {
   });
 }
 
-function renderSurvivalSvg(currentRes) {
+function renderSurvivalSvg(currentRes, optimizerPlan) {
   const optimalProfile = { ...PRESETS.optimal.values, age: state.inputs.age };
   const optimalRes = calculatePhenoAge(optimalProfile);
 
   const currentCurve = generateSurvivalCurve(currentRes.xb, 10);
   const baselineCurve = generateSurvivalCurve(currentRes.xbChronoRef, 10);
   const optimalCurve = generateSurvivalCurve(optimalRes.xb, 10);
+  const whatIfCurve =
+    !optimizerPlan.alreadyOptimal && optimizerPlan.achievedDropYears > 0.05
+      ? generateSurvivalCurve(optimizerPlan.projectedXb, 10)
+      : null;
 
   const minSurvival = Math.min(
     currentCurve[10].survival,
@@ -275,9 +453,9 @@ function renderSurvivalSvg(currentRes) {
   const yFloor = Math.max(0, Math.floor((minSurvival - 0.04) * 20) / 20);
   const yCeil = 1.0;
 
-  const width = 560;
-  const height = 236;
-  const pad = { top: 16, right: 20, bottom: 34, left: 54 };
+  const width = 580;
+  const height = 200;
+  const pad = { top: 14, right: 18, bottom: 28, left: 52 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
 
@@ -299,9 +477,9 @@ function renderSurvivalSvg(currentRes) {
     const y = yScale(val);
     gridLines += `
       <line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${width - pad.right}" y2="${y.toFixed(1)}"
-        stroke="rgba(232,226,213,0.1)" stroke-width="1" />
+        stroke="#e5e5e3" stroke-width="1" />
       <text x="${pad.left - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end"
-        fill="#9aa7b8" font-size="12" font-family="JetBrains Mono, monospace">${(val * 100).toFixed(1)}%</text>
+        fill="#555555" font-size="11.5" font-family="JetBrains Mono, monospace">${(val * 100).toFixed(1)}%</text>
     `;
   }
 
@@ -309,8 +487,8 @@ function renderSurvivalSvg(currentRes) {
   for (let yr = 0; yr <= 10; yr += 2) {
     const x = xScale(yr);
     xTicks += `
-      <text x="${x.toFixed(1)}" y="${height - 10}" text-anchor="middle"
-        fill="#9aa7b8" font-size="12" font-family="JetBrains Mono, monospace">Yr ${yr}</text>
+      <text x="${x.toFixed(1)}" y="${height - 8}" text-anchor="middle"
+        fill="#555555" font-size="11.5" font-family="JetBrains Mono, monospace">Yr ${yr}</text>
     `;
   }
 
@@ -322,21 +500,70 @@ function renderSurvivalSvg(currentRes) {
       ${gridLines}
       ${xTicks}
 
-      <path d="${toPath(optimalCurve)}" fill="none" stroke="#d8a34c" stroke-width="1.75" stroke-dasharray="4 4" opacity="0.9" />
-      <path d="${toPath(baselineCurve)}" fill="none" stroke="#cfc8bb" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.65" />
-      <path d="${toPath(currentCurve)}" fill="none" stroke="#49b8ae" stroke-width="2.6" />
+      <path d="${toPath(optimalCurve)}" fill="none" stroke="#8f5814" stroke-width="1.6" stroke-dasharray="4 4" opacity="0.8" />
+      <path d="${toPath(baselineCurve)}" fill="none" stroke="#8a8a85" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.85" />
+      ${
+        whatIfCurve
+          ? `<path d="${toPath(whatIfCurve)}" fill="none" stroke="#2d7a5a" stroke-width="2" stroke-dasharray="6 4" />`
+          : ''
+      }
+      <path d="${toPath(currentCurve)}" fill="none" stroke="#1b5e43" stroke-width="2.6" />
 
-      <circle cx="${xScale(10).toFixed(1)}" cy="${yScale(endOpt.survival).toFixed(1)}" r="3.5" fill="#d8a34c" />
-      <circle cx="${xScale(10).toFixed(1)}" cy="${yScale(endCur.survival).toFixed(1)}" r="4.5" fill="#0d1117" stroke="#49b8ae" stroke-width="2.4" />
+      <circle cx="${xScale(10).toFixed(1)}" cy="${yScale(endOpt.survival).toFixed(1)}" r="3.2" fill="#8f5814" />
+      <circle cx="${xScale(10).toFixed(1)}" cy="${yScale(endCur.survival).toFixed(1)}" r="4.5" fill="#ffffff" stroke="#1b5e43" stroke-width="2.4" />
     </svg>
   `;
+}
+
+function renderOptimizer(optimizerPlan) {
+  const tgt = state.targetDropYears;
+  optimizerHeadingEl.textContent = `Exact 3 Marker Shifts to Drop ${tgt} Biological ${tgt === 1 ? 'Year' : 'Years'}`;
+
+  if (optimizerPlan.alreadyOptimal || optimizerPlan.shifts.length === 0) {
+    optimizerSummaryEl.innerHTML = `Your biomarkers are already at Medicine 3.0 optimal targets. PhenoAge is <strong>${optimizerPlan.basePhenoAge.toFixed(1)} yrs</strong>.`;
+    optimizerShiftsEl.innerHTML = `
+      <div class="optimizer-empty">
+        All 9 markers are at or better than optimal targets — zero modifiable biological years remaining.
+      </div>
+    `;
+    btnApplyOptimizer.disabled = true;
+  } else {
+    const capNote = optimizerPlan.isFullyAchievable
+      ? ''
+      : ` (max achievable within optimal targets)`;
+    optimizerSummaryEl.innerHTML =
+      `Moves PhenoAge from <strong>${optimizerPlan.basePhenoAge.toFixed(1)}</strong> to ` +
+      `<strong>${optimizerPlan.projectedPhenoAge.toFixed(1)} yrs</strong> ` +
+      `(<strong>-${optimizerPlan.achievedDropYears.toFixed(2)} yrs</strong>${capNote}).`;
+
+    optimizerShiftsEl.innerHTML = optimizerPlan.shifts
+      .map((s, idx) => {
+        const unit = getBiomarkerUnit(s.biomarker, state.unitSystem);
+        const curFmt = formatBiomarkerValue(s.biomarker, s.currentVal, state.unitSystem);
+        const tgtFmt = formatBiomarkerValue(s.biomarker, s.targetVal, state.unitSystem);
+        return `
+          <div class="shift-card">
+            <div class="shift-head">
+              <span class="shift-name">#${idx + 1} ${s.shortName}</span>
+              <span class="shift-drop">-${s.dropYears.toFixed(2)} yrs</span>
+            </div>
+            <div class="shift-values">${curFmt} &rarr; <strong>${tgtFmt} ${unit}</strong></div>
+          </div>
+        `;
+      })
+      .join('');
+
+    btnApplyOptimizer.disabled = false;
+  }
+
+  btnUndoOptimizer.classList.toggle('hidden', !state.previousInputsForUndo);
 }
 
 function renderTornado() {
   const tornado = computeTornadoLeverage(state.inputs);
   const maxReduction = Math.max(0.5, ...tornado.items.map((i) => i.reductionYears));
 
-  tornadoTotalPillEl.textContent = `Modifiable gain: -${tornado.totalModifiableYears.toFixed(1)} yrs`;
+  tornadoTotalPillEl.textContent = `Gain: -${tornado.totalModifiableYears.toFixed(1)} yrs`;
   tornadoChartEl.innerHTML = '';
 
   tornado.items.forEach((item, index) => {
@@ -361,7 +588,7 @@ function renderTornado() {
           <span class="tornado-name">${item.shortName}</span>
         </div>
         <span class="tornado-delta${item.isAlreadyOptimal ? ' zero' : ''}">
-          ${item.isAlreadyOptimal ? 'At Optimal' : `-${item.reductionYears.toFixed(2)} yrs`}
+          ${item.isAlreadyOptimal ? 'Optimal' : `-${item.reductionYears.toFixed(2)} yrs`}
         </span>
       </div>
       <div class="tornado-bar-track">
@@ -371,10 +598,8 @@ function renderTornado() {
         <span>${curFmt} &rarr; ${tgtFmt} ${unit}</span>
         <span>${
           item.isAlreadyOptimal
-            ? item.surplusYears > 0.05
-              ? `Protective buffer (+${item.surplusYears.toFixed(1)} yrs)`
-              : 'Target achieved'
-            : `10-yr mortality -${item.mortalityDeltaPct.toFixed(2)} pp`
+            ? 'Target met'
+            : `10-yr M -${item.mortalityDeltaPct.toFixed(2)} pp`
         }</span>
       </div>
     `;
@@ -383,6 +608,7 @@ function renderTornado() {
       row.addEventListener('click', () => {
         state.inputs[bm.key] = bm.optimal;
         state.activePreset = null;
+        state.previousInputsForUndo = null;
         renderAll();
       });
     }
@@ -443,11 +669,66 @@ function renderAuditTable(res) {
     .join('');
 }
 
+function renderPrintSummary(res, optimizerPlan) {
+  const today = new Date().toISOString().slice(0, 10);
+  const sign = res.ageAcceleration >= 0 ? '+' : '';
+  const markerRows = BIOMARKERS.map((bm) => {
+    const unit = getBiomarkerUnit(bm, state.unitSystem);
+    const cur = formatBiomarkerValue(bm, state.inputs[bm.key], state.unitSystem);
+    const opt = formatBiomarkerValue(bm, bm.optimal, state.unitSystem);
+    const status = getBiomarkerStatus(bm, state.inputs[bm.key]).label;
+    return `<tr><td>${bm.name}</td><td>${bm.domain}</td><td class="mono">${cur} ${unit}</td><td class="mono">${opt} ${unit}</td><td>${status}</td></tr>`;
+  }).join('');
+
+  const planBlock =
+    optimizerPlan.alreadyOptimal || optimizerPlan.shifts.length === 0
+      ? `<p>All 9 biomarkers are already at or near Medicine 3.0 optimal targets.</p>`
+      : `<p>Projected PhenoAge: <strong>${optimizerPlan.projectedPhenoAge.toFixed(1)} yrs</strong> (-${optimizerPlan.achievedDropYears.toFixed(2)} yrs; 10-yr mortality ${(optimizerPlan.projectedMortality10Yr * 100).toFixed(2)}%).</p>
+         <table class="print-table">
+           <thead><tr><th>Priority</th><th>Biomarker</th><th>Current</th><th>Target Shift</th><th>Impact</th></tr></thead>
+           <tbody>
+             ${optimizerPlan.shifts
+               .map((s, idx) => {
+                 const unit = getBiomarkerUnit(s.biomarker, state.unitSystem);
+                 const cur = formatBiomarkerValue(s.biomarker, s.currentVal, state.unitSystem);
+                 const tgt = formatBiomarkerValue(s.biomarker, s.targetVal, state.unitSystem);
+                 return `<tr><td>#${idx + 1}</td><td>${s.name}</td><td class="mono">${cur} ${unit}</td><td class="mono">${tgt} ${unit}</td><td class="mono">-${s.dropYears.toFixed(2)} yrs</td></tr>`;
+               })
+               .join('')}
+           </tbody>
+         </table>`;
+
+  printDoctorSummaryEl.innerHTML = `
+    <h1>Biological Age (PhenoAge) Doctor Discussion Brief</h1>
+    <div class="print-meta">
+      Date: ${today} &middot; Unit System: ${state.unitSystem} &middot; Model: Levine et al. (2018) PhenoAge Gompertz Formula &middot; 100% Client-Side
+    </div>
+    <h2>Summary Outcomes</h2>
+    <table class="print-table">
+      <tbody>
+        <tr><th>Chronological Age</th><td class="mono">${state.inputs.age.toFixed(1)} yrs</td><th>PhenoAge</th><td class="mono"><strong>${res.phenoAge.toFixed(1)} yrs</strong></td></tr>
+        <tr><th>Age Acceleration</th><td class="mono"><strong>${sign}${res.ageAcceleration.toFixed(1)} yrs</strong></td><th>10-Year Mortality (M)</th><td class="mono">${(res.mortality10Yr * 100).toFixed(2)}% (ref ${(res.mortality10YrRef * 100).toFixed(2)}%)</td></tr>
+        <tr><th>Relative Hazard</th><td class="mono">${res.hazardRatioVsBaseline.toFixed(2)}x</td><th>Linear Predictor (xb)</th><td class="mono">${res.xb.toFixed(4)}</td></tr>
+      </tbody>
+    </table>
+    <h2>Current Biomarker Panel</h2>
+    <table class="print-table">
+      <thead><tr><th>Biomarker</th><th>Domain</th><th>Current</th><th>Optimal Target</th><th>Status</th></tr></thead>
+      <tbody>${markerRows}</tbody>
+    </table>
+    <h2>Private &ldquo;What-If&rdquo; 3-Marker Plan (-${state.targetDropYears} yr Target)</h2>
+    ${planBlock}
+    <div class="print-disclaimer">
+      Educational and research summary only. Implements Levine et al. (2018, Aging 10(4):573-591, doi:10.18632/aging.101414). Not a medical device or clinical diagnosis. Discuss lab targets with a licensed physician.
+    </div>
+  `;
+}
+
 function renderOutputs() {
   const res = calculatePhenoAge(state.inputs);
+  const optimizerPlan = computeWhatIfOptimizer(state.inputs, state.targetDropYears, 3);
 
-  outPhenoAgeEl.textContent = res.phenoAge.toFixed(1);
-  outChronoCompareEl.textContent = `vs. Chronological Age ${state.inputs.age.toFixed(1)} years`;
+  animateBioAgeGauge(res.phenoAge, state.inputs.age);
 
   const sign = res.ageAcceleration >= 0 ? '+' : '';
   outAccelEl.textContent = `${sign}${res.ageAcceleration.toFixed(1)} yrs`;
@@ -469,7 +750,7 @@ function renderOutputs() {
   const mortPct = res.mortality10Yr * 100;
   const mortRefPct = res.mortality10YrRef * 100;
   outMortalityEl.textContent = `${mortPct.toFixed(2)}%`;
-  outMortalityRefEl.textContent = `Age-matched ref: ${mortRefPct.toFixed(2)}%`;
+  outMortalityRefEl.textContent = `Ref: ${mortRefPct.toFixed(2)}%`;
 
   outHrEl.textContent = `${res.hazardRatioVsBaseline.toFixed(2)}x`;
   outHrEl.className =
@@ -480,14 +761,17 @@ function renderOutputs() {
       : 'kpi-stat-value';
 
   outXbEl.textContent = res.xb.toFixed(4);
+  drawerMathPillEl.textContent = `xb = ${res.xb.toFixed(3)}`;
 
   auditXbEl.textContent = res.xb.toFixed(5);
   auditMEl.textContent = `${mortPct.toFixed(3)}% (${res.mortality10Yr.toFixed(5)})`;
   auditPhenoAgeEl.textContent = res.phenoAge.toFixed(2);
 
-  renderSurvivalSvg(res);
+  renderSurvivalSvg(res, optimizerPlan);
+  renderOptimizer(optimizerPlan);
   renderTornado();
   renderAuditTable(res);
+  renderPrintSummary(res, optimizerPlan);
 }
 
 function renderAll() {
@@ -512,8 +796,60 @@ document.querySelectorAll('.unit-btn').forEach((btn) => {
     });
 
     buildBiomarkerControls();
-    renderTornado();
+    renderOutputs();
   });
+});
+
+document.querySelectorAll('.target-pill').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const drop = parseFloat(btn.dataset.drop);
+    if (Number.isNaN(drop) || drop === state.targetDropYears) return;
+    state.targetDropYears = drop;
+
+    document.querySelectorAll('.target-pill').forEach((b) => {
+      const isActive = parseFloat(b.dataset.drop) === drop;
+      b.classList.toggle('active', isActive);
+      b.setAttribute('aria-pressed', String(isActive));
+    });
+
+    renderOutputs();
+  });
+});
+
+btnApplyOptimizer.addEventListener('click', () => {
+  const plan = computeWhatIfOptimizer(state.inputs, state.targetDropYears, 3);
+  if (plan.alreadyOptimal || plan.shifts.length === 0) return;
+  state.previousInputsForUndo = { ...state.inputs };
+  state.inputs = { ...plan.projectedInputs };
+  state.activePreset = null;
+  renderAll();
+});
+
+btnUndoOptimizer.addEventListener('click', () => {
+  if (!state.previousInputsForUndo) return;
+  state.inputs = { ...state.previousInputsForUndo };
+  state.previousInputsForUndo = null;
+  renderAll();
+});
+
+btnDownloadMd.addEventListener('click', () => {
+  const res = calculatePhenoAge(state.inputs);
+  const plan = computeWhatIfOptimizer(state.inputs, state.targetDropYears, 3);
+  const md = generateDoctorSummaryMarkdown(state.inputs, res, plan, state.unitSystem);
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `phenoage-doctor-summary-${today}.md`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+btnPrintSummary.addEventListener('click', () => {
+  window.print();
 });
 
 sliderAgeEl.addEventListener('input', (e) => {
@@ -531,6 +867,7 @@ inputAgeEl.addEventListener('input', (e) => {
 });
 
 btnApplyAllOptimal.addEventListener('click', () => {
+  state.previousInputsForUndo = { ...state.inputs };
   for (const bm of BIOMARKERS) {
     state.inputs[bm.key] = bm.optimal;
   }
