@@ -10,6 +10,7 @@ import {
   getBiomarkerStatus,
   getBiomarkerUnit,
 } from './model/phenoage.js';
+import nhanesValidation from './data/nhanes_validation_results.json';
 
 const state = {
   unitSystem: 'SI', // 'SI' or 'US'
@@ -24,6 +25,11 @@ const tornadoChartEl = document.getElementById('tornado-chart');
 const tornadoTotalPillEl = document.getElementById('tornado-total-pill');
 const survivalChartEl = document.getElementById('survival-chart');
 const coefTableBodyEl = document.getElementById('coef-table-body');
+
+const valSummaryLeadEl = document.getElementById('val-summary-lead');
+const valMetricsListEl = document.getElementById('val-metrics-list');
+const valCycleTbodyEl = document.getElementById('val-cycle-tbody');
+const valTableCaptionEl = document.getElementById('val-table-caption');
 
 const inputAgeEl = document.getElementById('input-age');
 const sliderAgeEl = document.getElementById('slider-age');
@@ -46,6 +52,87 @@ function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
 }
 
+function renderNhanesValidation() {
+  const { cohort, concordance, data_source: src, by_cycle: byCycle } = nhanesValidation;
+  const full = concordance.full_followup;
+  const ten = concordance.ten_year_window;
+  const mid = concordance.midlife_ages_50_65;
+  const cycleSpan = `${src.cycles[0].split('-')[0]}-${src.cycles[src.cycles.length - 1].split('-')[1]}`;
+
+  valSummaryLeadEl.textContent =
+    `Independent evaluation across ${src.cycles.length} public CDC NHANES cycles (${cycleSpan}), ` +
+    `covering n = ${cohort.n.toLocaleString('en-US')} complete-case adults (ages ${cohort.age_min}-${cohort.age_max}) ` +
+    `linked to the NCHS 2019 Public-Use Linked Mortality Files.`;
+
+  valMetricsListEl.innerHTML = `
+    <div class="breakdown-row">
+      <dt>Cohort &amp; Follow-Up Window</dt>
+      <dd>
+        <strong>n = ${cohort.n.toLocaleString('en-US')}</strong> complete-case adults across cycles
+        <code>${src.cycles.join(', ')}</code>; median follow-up <strong>${cohort.followup_median_years.toFixed(1)} years</strong>
+        (${cohort.followup_median_months.toFixed(0)} months, max ${cohort.followup_max_months} months) through Dec 31, 2019;
+        <strong>${cohort.deaths_all_followup.toLocaleString('en-US')}</strong> observed all-cause deaths
+        (${cohort.mortality_rate_all_followup_pct.toFixed(2)}%), including
+        <strong>${cohort.deaths_10yr.toLocaleString('en-US')}</strong> within 10 years.
+      </dd>
+    </div>
+    <div class="breakdown-row">
+      <dt>Harrell's C-Index (Full Follow-Up)</dt>
+      <dd>
+        PhenoAge <strong>${full.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age alone
+        <strong>${full.c_index_chrono_age.toFixed(4)}</strong>
+        (<strong>+${full.c_index_delta.toFixed(4)}</strong> concordance gain on observed all-cause mortality).
+      </dd>
+    </div>
+    <div class="breakdown-row">
+      <dt>Harrell's C-Index (10-Year Window)</dt>
+      <dd>
+        Censored at 120 months to match the model's 10-year horizon: PhenoAge
+        <strong>${ten.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age alone
+        <strong>${ten.c_index_chrono_age.toFixed(4)}</strong>
+        (<strong>+${ten.c_index_delta.toFixed(4)}</strong>).
+      </dd>
+    </div>
+    <div class="breakdown-row">
+      <dt>Mid-Life Subgroup (Ages 50-65, n = ${mid.n.toLocaleString('en-US')}, ${mid.deaths.toLocaleString('en-US')} deaths)</dt>
+      <dd>
+        Where chronological age has narrow spread, PhenoAge achieves C-index
+        <strong>${mid.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age
+        <strong>${mid.c_index_chrono_age.toFixed(4)}</strong>
+        (<strong>+${mid.c_index_delta.toFixed(4)}</strong>).
+      </dd>
+    </div>
+    <div class="breakdown-row">
+      <dt>Analytical Biomarker Sensitivity</dt>
+      <dd>
+        Because PhenoAge is linear in <code>xb</code>, each marker's biological-age slope is
+        <code>d(PhenoAge) / dx_j = beta_j / 0.090165</code>: <code>+1%</code> RDW adds
+        <code>+3.67</code> yrs, <code>+1 mmol/L</code> glucose adds <code>+2.17</code> yrs, and
+        <code>+1 g/L</code> albumin subtracts <code>0.37</code> yrs.
+      </dd>
+    </div>
+  `;
+
+  valTableCaptionEl.textContent =
+    `${src.survey} (${cycleSpan}), ${src.mortality_linkage}. Every cycle independently shows higher mortality concordance for PhenoAge than chronological age alone.`;
+
+  valCycleTbodyEl.innerHTML = byCycle
+    .map(
+      (row) => `
+      <tr>
+        <td class="mono"><strong>${row.cycle}</strong></td>
+        <td class="mono">${row.n.toLocaleString('en-US')}</td>
+        <td class="mono">${row.deaths.toLocaleString('en-US')}</td>
+        <td class="mono">${row.median_followup_months.toFixed(0)} mo</td>
+        <td class="mono">${row.c_index_phenoage.toFixed(4)}</td>
+        <td class="mono">${row.c_index_chrono_age.toFixed(4)}</td>
+        <td class="mono delta-pos">+${row.c_index_delta.toFixed(4)}</td>
+      </tr>
+    `
+    )
+    .join('');
+}
+
 function renderPresets() {
   presetGridEl.innerHTML = '';
   for (const preset of Object.values(PRESETS)) {
@@ -62,8 +149,6 @@ function renderPresets() {
     `;
     btn.addEventListener('click', () => {
       state.activePreset = preset.id;
-      // Preserve current chronological age so users can compare profiles at their own age,
-      // unless they want the full preset; keep age synced cleanly.
       state.inputs = { ...preset.values, age: state.inputs.age };
       renderAll();
     });
@@ -87,7 +172,6 @@ function buildBiomarkerControls() {
     const optDisp = formatBiomarkerValue(bm, bm.optimal, state.unitSystem);
     const status = getBiomarkerStatus(bm, state.inputs[bm.key]);
 
-    // Calculate optimal band percentage along slider track
     const leftPct = ((bm.optimalBand[0] - bm.min) / (bm.max - bm.min)) * 100;
     const widthPct = ((bm.optimalBand[1] - bm.optimalBand[0]) / (bm.max - bm.min)) * 100;
 
@@ -127,7 +211,7 @@ function buildBiomarkerControls() {
       </div>
       <div class="slider-scale">
         <span>${formatBiomarkerValue(bm, bm.min, state.unitSystem)} ${unit}</span>
-        <span class="slider-opt-label">Optimal target: ${optDisp} ${unit}</span>
+        <span class="slider-opt-label">Target: ${optDisp} ${unit}</span>
         <span>${formatBiomarkerValue(bm, bm.max, state.unitSystem)} ${unit}</span>
       </div>
     `;
@@ -183,7 +267,6 @@ function renderSurvivalSvg(currentRes) {
   const baselineCurve = generateSurvivalCurve(currentRes.xbChronoRef, 10);
   const optimalCurve = generateSurvivalCurve(optimalRes.xb, 10);
 
-  // Determine dynamic y-axis floor so small mortality differences remain clearly legible
   const minSurvival = Math.min(
     currentCurve[10].survival,
     baselineCurve[10].survival,
@@ -216,9 +299,9 @@ function renderSurvivalSvg(currentRes) {
     const y = yScale(val);
     gridLines += `
       <line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${width - pad.right}" y2="${y.toFixed(1)}"
-        stroke="rgba(232,226,213,0.09)" stroke-width="1" />
+        stroke="rgba(232,226,213,0.1)" stroke-width="1" />
       <text x="${pad.left - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end"
-        fill="#8c9bae" font-size="12" font-family="JetBrains Mono, monospace">${(val * 100).toFixed(1)}%</text>
+        fill="#9aa7b8" font-size="12" font-family="JetBrains Mono, monospace">${(val * 100).toFixed(1)}%</text>
     `;
   }
 
@@ -227,7 +310,7 @@ function renderSurvivalSvg(currentRes) {
     const x = xScale(yr);
     xTicks += `
       <text x="${x.toFixed(1)}" y="${height - 10}" text-anchor="middle"
-        fill="#8c9bae" font-size="12" font-family="JetBrains Mono, monospace">Yr ${yr}</text>
+        fill="#9aa7b8" font-size="12" font-family="JetBrains Mono, monospace">Yr ${yr}</text>
     `;
   }
 
@@ -236,31 +319,15 @@ function renderSurvivalSvg(currentRes) {
 
   survivalChartEl.innerHTML = `
     <svg class="survival-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="10-year Gompertz survival curve">
-      <defs>
-        <linearGradient id="tealAreaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#4fd1c5" stop-opacity="0.22" />
-          <stop offset="100%" stop-color="#4fd1c5" stop-opacity="0.01" />
-        </linearGradient>
-      </defs>
       ${gridLines}
       ${xTicks}
 
-      <!-- Area under current curve -->
-      <path d="${toPath(currentCurve)} L${xScale(10).toFixed(1)},${(pad.top + plotH).toFixed(1)} L${xScale(0).toFixed(1)},${(pad.top + plotH).toFixed(1)} Z"
-        fill="url(#tealAreaGrad)" />
+      <path d="${toPath(optimalCurve)}" fill="none" stroke="#d8a34c" stroke-width="1.75" stroke-dasharray="4 4" opacity="0.9" />
+      <path d="${toPath(baselineCurve)}" fill="none" stroke="#cfc8bb" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.65" />
+      <path d="${toPath(currentCurve)}" fill="none" stroke="#49b8ae" stroke-width="2.6" />
 
-      <!-- Optimal target curve -->
-      <path d="${toPath(optimalCurve)}" fill="none" stroke="#e2a84b" stroke-width="1.75" stroke-dasharray="4 4" opacity="0.9" />
-
-      <!-- Chronological baseline curve -->
-      <path d="${toPath(baselineCurve)}" fill="none" stroke="#d6cfc2" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.6" />
-
-      <!-- Current user curve -->
-      <path d="${toPath(currentCurve)}" fill="none" stroke="#4fd1c5" stroke-width="2.6" />
-
-      <!-- End markers -->
-      <circle cx="${xScale(10).toFixed(1)}" cy="${yScale(endOpt.survival).toFixed(1)}" r="3.5" fill="#e2a84b" />
-      <circle cx="${xScale(10).toFixed(1)}" cy="${yScale(endCur.survival).toFixed(1)}" r="4.5" fill="#0a0f14" stroke="#4fd1c5" stroke-width="2.4" />
+      <circle cx="${xScale(10).toFixed(1)}" cy="${yScale(endOpt.survival).toFixed(1)}" r="3.5" fill="#d8a34c" />
+      <circle cx="${xScale(10).toFixed(1)}" cy="${yScale(endCur.survival).toFixed(1)}" r="4.5" fill="#0d1117" stroke="#49b8ae" stroke-width="2.4" />
     </svg>
   `;
 }
@@ -332,7 +399,7 @@ function renderAuditTable(res) {
       coef: MODEL_CONSTANTS.INTERCEPT.toFixed(4),
       input: '1',
       contrib: res.terms.intercept.toFixed(4),
-      mech: 'Baseline Gompertz log-hazard anchor fitted to NHANES III.',
+      mech: 'Baseline Gompertz log-hazard anchor fitted by Levine et al. (2018) on NHANES III.',
     },
     {
       label: 'Chronological Age',
@@ -472,4 +539,5 @@ btnApplyAllOptimal.addEventListener('click', () => {
 });
 
 // Initial Boot
+renderNhanesValidation();
 renderAll();

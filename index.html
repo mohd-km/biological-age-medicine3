@@ -6,7 +6,29 @@
     <title>Biological Age &amp; Medicine 3.0 Survival Model — Mohammed KM</title>
     <meta
       name="description"
-      content="Interactive client-side implementation of the Levine et al. (2018) PhenoAge Gompertz proportional-hazards biological age and 10-year survival model."
+      content="Interactive client-side implementation of the Levine et al. (2018) PhenoAge Gompertz survival model, paired with an independent CDC NHANES 1999-2010 mortality concordance validation (n = 28,316) by Mohammed KM."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://bioage.mohammed-km.in/" />
+    <meta property="og:title" content="Biological Age &amp; Medicine 3.0 Survival Model — Mohammed KM" />
+    <meta
+      property="og:description"
+      content="Exact Levine et al. (2018) PhenoAge Gompertz survival calculator with independent CDC NHANES 1999-2010 linked mortality validation (n = 28,316; Harrell's C-index 0.8645 vs 0.8484)."
+    />
+    <meta property="og:image" content="https://bioage.mohammed-km.in/og-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Biological Age &amp; Medicine 3.0 Survival Model — Mohammed KM" />
+    <meta
+      name="twitter:description"
+      content="Exact Levine et al. (2018) PhenoAge Gompertz survival calculator with independent CDC NHANES 1999-2010 mortality validation (n = 28,316)."
+    />
+    <meta name="twitter:image" content="https://bioage.mohammed-km.in/og-card.png" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d1117'/%3E%3Cpath d='M6 22 Q16 14 26 10' fill='none' stroke='%2349b8ae' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E"
     />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
@@ -14,16 +36,14 @@
     <div class="page-shell">
       <header class="masthead">
         <div class="masthead-top">
-          <div class="eyebrow-group">
-            <span class="eyebrow-pill">Medicine 3.0 Quantitative Modeling</span>
-            <span class="privacy-pill">
-              <span class="status-dot" aria-hidden="true"></span>
-              100% Client-Side Math &mdash; Zero Data Sent or Stored
-            </span>
+          <div class="masthead-meta">
+            <span>Mohammed KM</span>
+            <span class="meta-sep" aria-hidden="true">/</span>
+            <span>Client-side calculation &mdash; no lab values leave your browser</span>
           </div>
           <div class="unit-toggle" role="group" aria-label="Laboratory Unit System">
             <button type="button" class="unit-btn active" data-unit="SI" aria-pressed="true">
-              SI Units <span class="unit-sub">mmol/L, g/L, umol/L, mg/L</span>
+              SI Units <span class="unit-sub">mmol/L, g/L, umol/L</span>
             </button>
             <button type="button" class="unit-btn" data-unit="US" aria-pressed="false">
               US Units <span class="unit-sub">mg/dL, g/dL</span>
@@ -32,22 +52,21 @@
         </div>
 
         <div class="masthead-title-row">
-          <div>
-            <h1>Biological Age &amp; Medicine 3.0 Survival Model</h1>
-            <p class="subtitle">
-              Exact Levine et al. (2018, <em>Aging</em>) PhenoAge Gompertz proportional-hazards
-              framework across chronological age and 9 routine clinical biomarkers.
-              <span class="byline">By Mohammed KM</span>
-            </p>
-          </div>
+          <h1>Biological Age &amp; Medicine 3.0 Survival Model</h1>
+          <p class="subtitle">
+            Implements the exact PhenoAge Gompertz proportional-hazards formula derived and trained
+            by Levine et al. (2018, <em>Aging</em> 10(4):573-591,
+            <a href="https://doi.org/10.18632/aging.101414" target="_blank" rel="noopener noreferrer">doi:10.18632/aging.101414</a>)
+            on NHANES III/IV, paired with Mohammed KM's independent survival validation on public
+            CDC NHANES 1999-2010 linked mortality data.
+          </p>
         </div>
 
         <div class="disclaimer-banner" role="note" aria-label="Medical Disclaimer">
-          <strong>Educational &amp; Research Model Only:</strong>
-          This interactive calculator implements a published epidemiological survival model
-          (NHANES III &amp; IV linked mortality cohorts) for educational exploration. It is not a
-          medical device, does not diagnose or treat disease, and does not substitute for clinical
-          evaluation by a licensed physician.
+          <strong>Educational and research tool only:</strong>
+          This calculator implements a published epidemiological survival model for self-study. It
+          is not a medical device, does not diagnose or treat disease, and does not replace a
+          licensed physician.
         </div>
       </header>
 
@@ -55,8 +74,8 @@
         <!-- Preset Cohort Selector -->
         <section class="preset-bar" aria-label="Reference Cohort Presets">
           <div class="preset-bar-header">
-            <span class="section-kicker">Cohort Reference Profiles</span>
-            <span class="preset-hint">Select a benchmark profile or adjust any biomarker directly</span>
+            <span class="section-kicker">Reference Profiles</span>
+            <span class="preset-hint">Pick a benchmark profile or adjust any biomarker directly</span>
           </div>
           <div class="preset-grid" id="preset-grid"></div>
         </section>
@@ -77,27 +96,27 @@
 
             <div class="kpi-secondary-grid">
               <div class="kpi-stat">
-                <div class="kpi-label">Biological Age Acceleration</div>
+                <div class="kpi-label">Age Acceleration</div>
                 <div class="kpi-stat-value" id="out-accel">--</div>
                 <div class="kpi-badge" id="out-accel-badge">--</div>
               </div>
 
               <div class="kpi-stat">
-                <div class="kpi-label">10-Year All-Cause Mortality (M)</div>
+                <div class="kpi-label">10-Year Mortality (M)</div>
                 <div class="kpi-stat-value" id="out-mortality">--</div>
                 <div class="kpi-sub" id="out-mortality-ref">Baseline ref: --</div>
               </div>
 
               <div class="kpi-stat">
-                <div class="kpi-label">Relative Mortality Hazard</div>
+                <div class="kpi-label">Relative Hazard</div>
                 <div class="kpi-stat-value" id="out-hr">--</div>
-                <div class="kpi-sub">vs. chronological-age baseline</div>
+                <div class="kpi-sub">vs. age-matched baseline</div>
               </div>
 
               <div class="kpi-stat">
-                <div class="kpi-label">Gompertz Linear Predictor (xb)</div>
+                <div class="kpi-label">Linear Predictor (xb)</div>
                 <div class="kpi-stat-value mono" id="out-xb">--</div>
-                <div class="kpi-sub">Exact proportional-hazards score</div>
+                <div class="kpi-sub">Gompertz log-hazard score</div>
               </div>
             </div>
           </div>
@@ -105,7 +124,7 @@
           <div class="chart-panel">
             <div class="panel-header">
               <div>
-                <div class="section-kicker">10-Year Gompertz Survival Trajectory</div>
+                <div class="section-kicker">10-Year Gompertz Trajectory</div>
                 <h2>Projected Survival Probability S(t)</h2>
               </div>
               <div class="chart-legend">
@@ -116,8 +135,7 @@
             </div>
             <div class="survival-chart-wrap" id="survival-chart"></div>
             <p class="chart-footnote">
-              Survival curve computed from Gompertz hazard S(t) = exp(-((exp(gamma * 12t) - 1) / gamma) * exp(xb)),
-              with gamma = 0.0076927 month<sup>-1</sup> over 120 months.
+              S(t) = exp(-((exp(gamma * 12t) - 1) / gamma) * exp(xb)), with gamma = 0.0076927 / month over 120 months.
             </p>
           </div>
         </section>
@@ -139,9 +157,9 @@
             <!-- Chronological Age Control -->
             <div class="age-control-card">
               <div class="biomarker-top">
-                <div>
+                <div class="bm-title-group">
                   <span class="bm-name">Chronological Age</span>
-                  <span class="bm-domain">Non-Modifiable Baseline Anchor</span>
+                  <span class="bm-domain">Baseline Anchor</span>
                 </div>
                 <div class="bm-input-group">
                   <input
@@ -157,19 +175,21 @@
                   <span class="unit-tag">yrs</span>
                 </div>
               </div>
-              <input
-                type="range"
-                id="slider-age"
-                class="range-slider age-slider"
-                min="18"
-                max="95"
-                step="1"
-                value="45"
-                aria-label="Chronological Age slider"
-              />
+              <div class="slider-track-wrap">
+                <input
+                  type="range"
+                  id="slider-age"
+                  class="range-slider age-slider"
+                  min="18"
+                  max="95"
+                  step="1"
+                  value="45"
+                  aria-label="Chronological Age slider"
+                />
+              </div>
               <div class="slider-scale">
                 <span>18 yrs</span>
-                <span>Weight: +0.0804 per year</span>
+                <span>Weight: +0.0804 / yr</span>
                 <span>95 yrs</span>
               </div>
             </div>
@@ -181,43 +201,53 @@
           <div class="panel tornado-panel">
             <div class="panel-header">
               <div>
-                <div class="section-kicker">Sensitivity &amp; Intervention Priority</div>
-                <h2>Modifiable Leverage Tornado Chart</h2>
+                <div class="section-kicker">Intervention Priority</div>
+                <h2>Modifiable Leverage by Biomarker</h2>
               </div>
               <div class="tornado-summary-pill" id="tornado-total-pill">
-                Total modifiable: -- yrs
+                Modifiable gain: -- yrs
               </div>
             </div>
             <p class="panel-intro">
-              Each bar quantifies the exact biological age reduction achieved by moving
-              <strong>only that single biomarker</strong> from its current value to its Medicine 3.0
-              optimal target, holding chronological age and all other markers constant. Click any
-              modifiable row to apply its target value.
+              Each row shows the biological age reduction from moving <strong>only that single
+              biomarker</strong> to its optimal target while holding age and all other markers
+              constant. Select any modifiable row to apply its target.
             </p>
             <div class="tornado-chart" id="tornado-chart"></div>
 
             <div class="medicine30-callout">
-              <div class="section-kicker">Medicine 3.0 Clinical Framing</div>
-              <h3>Why Population Reference Ranges Are Not Optimal Targets</h3>
+              <div class="section-kicker">Why Reference Ranges Are Not Targets</div>
+              <h3>Population Normals vs. Low-Risk Physiology</h3>
               <p>
-                Standard laboratory reference intervals (Medicine 2.0) typically span the central 95%
-                of an aging, metabolically heterogeneous population. Within those "normal" bounds,
-                small upward shifts in fasting glucose, RDW, hs-CRP, and leukocyte count compound
-                exponentially in the Gompertz mortality hazard. Medicine 3.0 shifts the objective from
-                late-stage disease detection to proactive risk-surface compression decades earlier.
+                Standard lab intervals cover the central 95% of an aging population. Inside those
+                "normal" bounds, small upward shifts in glucose, RDW, hs-CRP, and white blood cell
+                count compound exponentially in the Gompertz hazard. Medicine 3.0 treats those
+                drifts years before clinical disease is diagnosed.
               </p>
             </div>
           </div>
         </section>
 
-        <!-- Transparent Methodology & Live Mathematical Specification -->
-        <section class="panel methodology-panel" aria-label="Methodology and Citations">
+        <!-- Transparent Methodology, Attribution & Real NHANES Survival Validation -->
+        <section class="panel methodology-panel" aria-label="Methodology and NHANES Validation">
           <div class="panel-header">
             <div>
-              <div class="section-kicker">Transparent Methodology &amp; Validation</div>
-              <h2>Mathematical Specification, Equation Breakdown &amp; Live Audit</h2>
+              <div class="section-kicker">Model Attribution &amp; Independent Validation</div>
+              <h2>Levine et al. (2018) Formula &amp; Real CDC NHANES Survival Check</h2>
             </div>
             <span class="mono-badge">Levine et al., Aging 2018; 10(4):573-591</span>
+          </div>
+
+          <div class="attribution-note">
+            <p>
+              <strong>Explicit model attribution:</strong> The PhenoAge Gompertz proportional-hazards
+              formula and all ten coefficients below were derived and trained by
+              <strong>Levine et al. (2018)</strong> (<em>Aging</em> 10(4):573-591,
+              <a href="https://doi.org/10.18632/aging.101414" target="_blank" rel="noopener noreferrer">doi:10.18632/aging.101414</a>)
+              on NHANES III and validated by their group on NHANES IV. This application implements
+              their exact published equations without modifying any coefficient, and adds Mohammed KM's
+              own independent build-time survival validation on public CDC NHANES 1999-2010 microdata.
+            </p>
           </div>
 
           <div class="formula-grid">
@@ -263,60 +293,30 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
             </div>
           </div>
 
-          <!-- Equation Breakdown & Validation Summary -->
+          <!-- Independent Real NHANES Validation Results -->
           <div class="v2-validation-grid">
             <div class="equation-breakdown-card">
-              <div class="section-kicker">Equation Breakdown</div>
-              <h3>Gompertz Survival Mechanics &amp; Sensitivity Structure</h3>
-              <dl class="breakdown-list">
-                <div class="breakdown-row">
-                  <dt>Hazard Function h(t | x)</dt>
-                  <dd>
-                    <code>h(t | x) = exp(xb) * exp(gamma * t)</code> &mdash; instantaneous mortality hazard
-                    doubles roughly every <code>ln(2) / (12 * gamma) = 7.51</code> years of follow-up.
-                  </dd>
-                </div>
-                <div class="breakdown-row">
-                  <dt>Cumulative 10-Year Risk (M)</dt>
-                  <dd>
-                    Integrating <code>h(t | x)</code> over <code>t = 120</code> months yields
-                    <code>H(120) = 197.218 * exp(xb)</code> and survival <code>S(120) = exp(-H(120))</code>.
-                  </dd>
-                </div>
-                <div class="breakdown-row">
-                  <dt>Analytical Biomarker Sensitivity</dt>
-                  <dd>
-                    Because PhenoAge is linear in <code>xb</code>, each marker's exact biological-age slope is
-                    <code>d(PhenoAge) / dx_j = beta_j / 0.090165</code> (for example, <code>+1%</code> RDW adds
-                    <code>+3.67</code> yrs; <code>+1 mmol/L</code> glucose adds <code>+2.17</code> yrs;
-                    <code>+1 g/L</code> albumin removes <code>0.37</code> yrs).
-                  </dd>
-                </div>
-                <div class="breakdown-row">
-                  <dt>NHANES III &amp; IV Validation</dt>
-                  <dd>
-                    Trained on NHANES III (<code>n = 9,926</code>, 42-biomarker Cox elastic-net selection) and
-                    validated in NHANES IV (<code>n = 11,432</code>): all-cause mortality Harrell's C-index
-                    <strong>0.879</strong> vs. <strong>0.862</strong> for chronological age alone (10-year ROC AUC
-                    <strong>0.88</strong>; HR <strong>1.09</strong> per +1 yr PhenoAge acceleration).
-                  </dd>
-                </div>
-              </dl>
+              <div class="section-kicker">Independent CDC NHANES Validation (Real Microdata)</div>
+              <h3>Observed All-Cause Mortality Concordance (1999-2010)</h3>
+              <p class="validation-lead" id="val-summary-lead">
+                Loading computed NHANES validation summary...
+              </p>
+              <dl class="breakdown-list" id="val-metrics-list"></dl>
             </div>
 
             <div class="github-inspect-card">
               <div>
-                <div class="section-kicker">Reproducible Analysis &amp; Audit Code</div>
-                <h3>Inspect Survival Model &amp; Validation Code on GitHub</h3>
+                <div class="section-kicker">Reproducible Audit Pipeline</div>
+                <h3>Inspect the Validation Script &amp; Output JSON</h3>
                 <p class="github-inspect-copy">
-                  Audit the standalone Python implementation of the Levine (2018) Gompertz proportional-hazards
-                  equations, analytical and one-at-a-time sensitivity tables, Harrell's C-index concordance
-                  evaluator, and documented NHANES III/IV validation methodology.
+                  Every number in the validation panel is computed directly from public CDC NHANES
+                  XPT laboratory files and NCHS 2019 Linked Mortality Files using a zero-dependency
+                  Python 3 script, committed alongside its JSON output.
                 </p>
                 <ul class="github-meta-list">
-                  <li><code>analysis/nhanes_phenoage_validation.py</code> &mdash; zero-dependency Python 3 script</li>
-                  <li>Exact numerical parity check against client-side JS model (<code>&lt; 1e-9</code> tolerance)</li>
-                  <li>Reproducible seeded synthetic NHANES-calibrated C-index benchmark</li>
+                  <li><code>analysis/nhanes_phenoage_validation.py</code> &mdash; downloads CDC XPT &amp; NCHS mortality files and computes exact Harrell's C-index</li>
+                  <li><code>src/data/nhanes_validation_results.json</code> &mdash; committed build-time validation results rendered on this page</li>
+                  <li>Formula parity verified against client-side JS tests (<code>&lt; 1e-9</code> tolerance)</li>
                 </ul>
               </div>
               <div class="github-cta-row">
@@ -326,13 +326,39 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Inspect Survival Model &amp; Validation Code on GitHub
+                  Inspect Validation Script on GitHub
                   <span class="cta-arrow" aria-hidden="true">&rarr;</span>
                 </a>
               </div>
             </div>
           </div>
 
+          <div class="table-section-head">
+            <h3>Per-Cycle NHANES Survival Validation Breakdown</h3>
+            <p class="table-caption" id="val-table-caption">
+              Complete-case adults age &ge; 20 years linked to NCHS 2019 Public-Use Linked Mortality Files.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table class="coef-table validation-table">
+              <thead>
+                <tr>
+                  <th>NHANES Cycle</th>
+                  <th>Adults (n)</th>
+                  <th>Observed Deaths</th>
+                  <th>Median Follow-Up</th>
+                  <th>C-Index (PhenoAge)</th>
+                  <th>C-Index (Chrono Age)</th>
+                  <th>Delta</th>
+                </tr>
+              </thead>
+              <tbody id="val-cycle-tbody"></tbody>
+            </table>
+          </div>
+
+          <div class="table-section-head">
+            <h3>Live Coefficient Breakdown for Current Inputs</h3>
+          </div>
           <div class="table-wrap">
             <table class="coef-table">
               <thead>
@@ -367,7 +393,7 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
               </li>
               <li>
                 Centers for Disease Control and Prevention (CDC), National Center for Health Statistics (NCHS).
-                <em>National Health and Nutrition Examination Survey (NHANES III &amp; Continuous NHANES) Linked Mortality Files.</em>
+                <em>Continuous NHANES (1999-2010) Laboratory &amp; Demographic Data Files and 2019 Public-Use Linked Mortality Files.</em>
                 U.S. Department of Health and Human Services.
               </li>
             </ol>
@@ -380,7 +406,7 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
           <strong>Biological Age &amp; Medicine 3.0 Survival Model</strong> &mdash; Built by Mohammed KM.
         </div>
         <div>
-          All computations run locally in your browser. Educational use only; not medical advice.
+          Formula by Levine et al. (2018). Independent NHANES validation by Mohammed KM. Educational use only.
         </div>
       </footer>
     </div>

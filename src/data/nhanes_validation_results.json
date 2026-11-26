@@ -1,0 +1,115 @@
+{
+  "model_attribution": {
+    "authors": "Levine ME, Lu AT, Quach A, et al. (2018)",
+    "journal": "Aging (Albany NY). 2018;10(4):573-591",
+    "doi": "10.18632/aging.101414",
+    "note": "All PhenoAge Gompertz coefficients were derived and trained by Levine et al. (2018) on NHANES III/IV. This JSON records Mohammed KM's independent survival concordance validation of that published formula on public CDC NHANES 1999-2010 microdata linked to the NCHS 2019 Public-Use Linked Mortality Files."
+  },
+  "computed_at_utc": "2026-11-26T22:01:16Z",
+  "data_source": {
+    "survey": "CDC Continuous NHANES",
+    "cycles": [
+      "1999-2000",
+      "2001-2002",
+      "2003-2004",
+      "2005-2006",
+      "2007-2008",
+      "2009-2010"
+    ],
+    "mortality_linkage": "NCHS 2019 Public-Use Linked Mortality Files (follow-up through Dec 31, 2019)",
+    "inclusion_criteria": "Complete-case adults age >= 20 yrs with mortality linkage (eligstat = 1), valid MEC exam follow-up (permth_exm), and all 9 required biomarkers (CRP > 0)."
+  },
+  "cohort": {
+    "n": 28316,
+    "age_min": 20,
+    "age_max": 85,
+    "mean_age_years": 49.48,
+    "mean_phenoage_years": 44.39,
+    "mean_age_acceleration_years": -5.09,
+    "sd_age_acceleration_years": 8.81,
+    "followup_median_months": 156.0,
+    "followup_median_years": 13.0,
+    "followup_max_months": 249,
+    "deaths_all_followup": 6071,
+    "mortality_rate_all_followup_pct": 21.44,
+    "deaths_10yr": 3923,
+    "mortality_rate_10yr_pct": 13.85
+  },
+  "concordance": {
+    "full_followup": {
+      "window": "Full NCHS 2019 linked follow-up (median 13.0 yrs)",
+      "c_index_phenoage": 0.8645,
+      "c_index_chrono_age": 0.8484,
+      "c_index_delta": 0.0162
+    },
+    "ten_year_window": {
+      "window": "10-year (120-month) administrative censoring",
+      "c_index_phenoage": 0.8672,
+      "c_index_chrono_age": 0.8484,
+      "c_index_delta": 0.0188
+    },
+    "midlife_ages_50_65": {
+      "n": 6861,
+      "deaths": 1379,
+      "c_index_phenoage": 0.7056,
+      "c_index_chrono_age": 0.6151,
+      "c_index_delta": 0.0906
+    }
+  },
+  "by_cycle": [
+    {
+      "cycle": "1999-2000",
+      "n": 4061,
+      "deaths": 1273,
+      "median_followup_months": 234.0,
+      "c_index_phenoage": 0.857,
+      "c_index_chrono_age": 0.8453,
+      "c_index_delta": 0.0117
+    },
+    {
+      "cycle": "2001-2002",
+      "n": 4642,
+      "deaths": 1236,
+      "median_followup_months": 212.0,
+      "c_index_phenoage": 0.8582,
+      "c_index_chrono_age": 0.8435,
+      "c_index_delta": 0.0147
+    },
+    {
+      "cycle": "2003-2004",
+      "n": 4373,
+      "deaths": 1130,
+      "median_followup_months": 188.0,
+      "c_index_phenoage": 0.8715,
+      "c_index_chrono_age": 0.8536,
+      "c_index_delta": 0.0179
+    },
+    {
+      "cycle": "2005-2006",
+      "n": 4395,
+      "deaths": 842,
+      "median_followup_months": 165.0,
+      "c_index_phenoage": 0.8736,
+      "c_index_chrono_age": 0.8619,
+      "c_index_delta": 0.0118
+    },
+    {
+      "cycle": "2007-2008",
+      "n": 5230,
+      "deaths": 889,
+      "median_followup_months": 141.0,
+      "c_index_phenoage": 0.8613,
+      "c_index_chrono_age": 0.8412,
+      "c_index_delta": 0.0201
+    },
+    {
+      "cycle": "2009-2010",
+      "n": 5615,
+      "deaths": 701,
+      "median_followup_months": 118.0,
+      "c_index_phenoage": 0.8579,
+      "c_index_chrono_age": 0.8398,
+      "c_index_delta": 0.0181
+    }
+  ]
+}

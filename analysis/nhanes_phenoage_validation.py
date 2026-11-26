@@ -1,40 +1,40 @@
 #!/usr/bin/env python3
 """
-Levine et al. (2018) PhenoAge Gompertz Proportional-Hazards Validation & Sensitivity Analysis.
+Independent Real-Data Survival Validation of Levine et al. (2018) PhenoAge
+on Public CDC NHANES (1999-2010) & NCHS 2019 Linked Mortality Files.
 
-Implements the exact published PhenoAge survival equations, analytical and one-at-a-time
-sensitivity analyses, unit-conversion verification, Harrell's C-index concordance metric,
-and documented NHANES III / NHANES IV validation methodology.
+Attribution:
+    The PhenoAge Gompertz proportional-hazards formula and all biomarker
+    coefficients were derived and trained by Levine et al. (2018, Aging
+    10(4):573-591, doi:10.18632/aging.101414) on NHANES III and validated
+    on NHANES IV. This script implements their exact published formula and
+    runs an independent survival concordance validation on public CDC
+    Continuous NHANES (1999-2010) lab/demographic XPT files linked to the
+    NCHS 2019 Public-Use Linked Mortality Files.
 
-Primary References:
-    1. Levine ME, Lu AT, Quach A, Chen BH, Assimes TL, Bandinelli S, Hou L,
-       Baccarelli AA, Stewart JD, Li Y, Whitsel EA, Wilson JG, Reiner AP,
-       Aviv A, Lohman K, Liu Y, Ferrucci L, Horvath S.
-       "An epigenetic biomarker of aging for lifespan and healthspan."
-       Aging (Albany NY). 2018;10(4):573-591. doi:10.18632/aging.101414
-    2. Liu Z, Kuo PL, Horvath S, Crimmins E, Ferrucci L, Levine M.
-       "A new aging measure captures morbidity and mortality risk across diverse
-       subpopulations from NHANES IV: A cohort study."
-       PLOS Medicine. 2018;15(12):e1002718. doi:10.1371/journal.pmed.1002718
-    3. CDC / NCHS. National Health and Nutrition Examination Survey (NHANES III
-       and Continuous NHANES) Public-Use Linked Mortality Files.
+Zero external dependencies (Python 3 standard library only):
+    - Pure-Python SAS XPORT (XPT v5) binary parser with IBM 360 float64 decoding
+    - Fixed-width NCHS 2019 Linked Mortality File parser
+    - Exact O(n log n) Fenwick-tree Harrell's C-index (cross-checked against O(n^2))
 
 Usage:
-    python3 analysis/nhanes_phenoage_validation.py
     python3 analysis/nhanes_phenoage_validation.py --verify
+    python3 analysis/nhanes_phenoage_validation.py --write-json
     python3 analysis/nhanes_phenoage_validation.py --json
-    python3 analysis/nhanes_phenoage_validation.py --cohort-n 2500 --seed 2018
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import math
-import random
 import statistics
+import struct
+import urllib.request
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 # ---------------------------------------------------------------------------
@@ -53,34 +53,30 @@ AGE_COEF: float = 0.0804
 
 @dataclass(frozen=True)
 class BiomarkerSpec:
-    """Canonical specification for each Levine (2018) clinical biomarker."""
-
     key: str
     name: str
     model_unit: str
     us_unit: str
     coef: float
     optimal: float
-    reference_sd: float  # Representative NHANES adult SD in model units
     is_log: bool = False
     higher_is_protective: bool = False
 
 
 BIOMARKERS: Tuple[BiomarkerSpec, ...] = (
-    BiomarkerSpec("albumin", "Albumin", "g/L", "g/dL", -0.0336, 47.0, 3.5, higher_is_protective=True),
-    BiomarkerSpec("creatinine", "Creatinine", "umol/L", "mg/dL", 0.0095, 68.0, 22.0),
-    BiomarkerSpec("glucose", "Fasting Glucose", "mmol/L", "mg/dL", 0.1953, 4.55, 1.35),
-    BiomarkerSpec("crp", "hs-CRP", "ln(mg/dL)", "mg/dL", 0.0954, 0.04, 1.15, is_log=True),
-    BiomarkerSpec("lymphocyte", "Lymphocyte %", "%", "%", -0.0120, 36.0, 7.5, higher_is_protective=True),
-    BiomarkerSpec("mcv", "Mean Cell Volume (MCV)", "fL", "fL", 0.0268, 86.0, 5.2),
-    BiomarkerSpec("rdw", "Red Cell Dist. Width (RDW)", "%", "%", 0.3306, 11.8, 1.15),
-    BiomarkerSpec("alp", "Alkaline Phosphatase (ALP)", "U/L", "U/L", 0.00188, 52.0, 24.0),
-    BiomarkerSpec("wbc", "White Blood Cell Count (WBC)", "10^3/uL", "10^3/uL", 0.0554, 4.8, 1.9),
+    BiomarkerSpec("albumin", "Albumin", "g/L", "g/dL", -0.0336, 47.0, higher_is_protective=True),
+    BiomarkerSpec("creatinine", "Creatinine", "umol/L", "mg/dL", 0.0095, 68.0),
+    BiomarkerSpec("glucose", "Glucose (serum)", "mmol/L", "mg/dL", 0.1953, 4.55),
+    BiomarkerSpec("crp", "C-Reactive Protein (CRP)", "ln(mg/dL)", "mg/dL", 0.0954, 0.04, is_log=True),
+    BiomarkerSpec("lymphocyte", "Lymphocyte %", "%", "%", -0.0120, 36.0, higher_is_protective=True),
+    BiomarkerSpec("mcv", "Mean Cell Volume (MCV)", "fL", "fL", 0.0268, 86.0),
+    BiomarkerSpec("rdw", "Red Cell Dist. Width (RDW)", "%", "%", 0.3306, 11.8),
+    BiomarkerSpec("alp", "Alkaline Phosphatase (ALP)", "U/L", "U/L", 0.00188, 52.0),
+    BiomarkerSpec("wbc", "White Blood Cell Count (WBC)", "10^3/uL", "10^3/uL", 0.0554, 4.8),
 )
 
 BIOMARKER_MAP: Dict[str, BiomarkerSpec] = {bm.key: bm for bm in BIOMARKERS}
 
-# Reference cohort profiles matching src/model/phenoage.js
 REFERENCE_PROFILES: Dict[str, Dict[str, float]] = {
     "optimal": {
         "age": 45.0,
@@ -122,49 +118,7 @@ REFERENCE_PROFILES: Dict[str, Dict[str, float]] = {
 
 
 # ---------------------------------------------------------------------------
-# 2. Documented NHANES III / IV Validation Methodology & Published Benchmarks
-# ---------------------------------------------------------------------------
-
-NHANES_VALIDATION_SUMMARY: Dict[str, object] = {
-    "training_cohort": {
-        "name": "NHANES III (1988-1994)",
-        "sample_size": 9926,
-        "age_range": "20-84+ years",
-        "mortality_followup": "Up to 23 years linked to National Death Index (NDI)",
-        "feature_selection": (
-            "Cox proportional-hazards elastic-net (penalized) regression across 42 clinical "
-            "biomarkers plus chronological age; 10-fold cross-validation selected 9 biomarkers "
-            "plus age predicting aging-related mortality."
-        ),
-        "parametric_fit": (
-            "Two Gompertz proportional-hazards models fitted to 10-year (120-month) mortality: "
-            "(1) full biomarker + age model yielding M, and (2) chronological-age-only Gompertz "
-            "model inverted to map M onto PhenoAge in years."
-        ),
-    },
-    "validation_cohort": {
-        "name": "NHANES IV / Continuous NHANES (1999-2010)",
-        "sample_size": 11432,
-        "age_range": "20-84+ years",
-        "mortality_followup": "Linked NDI mortality follow-up through December 2011 (1,012+ deaths in Liu et al. 2018)",
-        "published_metrics": {
-            "all_cause_mortality_c_index_phenoage": 0.879,
-            "all_cause_mortality_c_index_chrono_age": 0.862,
-            "ten_year_mortality_roc_auc_phenoage": 0.88,
-            "hazard_ratio_per_year_phenoage_accel": 1.09,
-            "cause_specific_findings": (
-                "Each +1 year increase in PhenoAgeAccel is associated with ~9% higher all-cause "
-                "mortality risk (HR ~1.09), and significant hazard elevation across heart disease, "
-                "cancer, diabetes, and chronic lower respiratory disease even after adjusting for "
-                "chronological age, sex, and smoking."
-            ),
-        },
-    },
-}
-
-
-# ---------------------------------------------------------------------------
-# 3. Core Gompertz Proportional-Hazards Survival Equations
+# 2. Core Gompertz Proportional-Hazards Survival Equations (Levine et al. 2018)
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -182,12 +136,8 @@ class PhenoAgeResult:
 
 def calculate_phenoage(inputs: Dict[str, float]) -> PhenoAgeResult:
     """
-    Compute Levine et al. (2018) PhenoAge, 10-year mortality probability M,
+    Compute Levine et al. (2018) PhenoAge, 10-year mortality score M,
     Gompertz linear predictor xb, age acceleration, and relative hazard.
-
-    Canonical units:
-        albumin (g/L), creatinine (umol/L), glucose (mmol/L), crp (mg/dL),
-        lymphocyte (%), mcv (fL), rdw (%), alp (U/L), wbc (10^3/uL), age (years).
     """
     safe_crp = max(float(inputs["crp"]), 0.001)
     ln_crp = math.log(safe_crp)
@@ -211,8 +161,6 @@ def calculate_phenoage(inputs: Dict[str, float]) -> PhenoAgeResult:
     ln_one_minus_m = -gompertz_ratio * math.exp(xb)
     mortality_10yr = 1.0 - math.exp(ln_one_minus_m)
 
-    # Numerically stable form identical to:
-    # 141.50225 + ln(-0.00553 * ln(1 - M)) / 0.090165
     phenoage = PHENOAGE_INTERCEPT + (
         math.log(abs(PHENOAGE_SCALE) * gompertz_ratio) + xb
     ) / PHENOAGE_RATE
@@ -241,10 +189,6 @@ def calculate_phenoage(inputs: Dict[str, float]) -> PhenoAgeResult:
 
 
 def survival_probability(xb: float, years: float) -> float:
-    """
-    Gompertz survival probability S(t) at t years (12 * t months):
-        S(t) = exp( -((exp(gamma * 12t) - 1) / gamma) * exp(xb) )
-    """
     months = years * 12.0
     if months <= 0.0:
         return 1.0
@@ -253,220 +197,622 @@ def survival_probability(xb: float, years: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# 4. Analytical & One-at-a-Time Sensitivity Analysis
+# 3. Pure-Python SAS XPORT (XPT v5) Reader (IBM 360 Float64 -> IEEE 754)
 # ---------------------------------------------------------------------------
 
-def analytical_sensitivities() -> List[Dict[str, object]]:
+def _ibm_to_ieee_float(raw: bytes) -> Optional[float]:
     """
-    Because PhenoAge is linear in xb with slope 1 / 0.090165:
-        d(PhenoAge) / d(x_j) = beta_j / 0.090165
-    (for hs-CRP, the derivative is with respect to ln(CRP in mg/dL)).
+    Decode an IBM 360/370 big-endian 8-byte floating-point number from SAS XPT.
+    Returns None for SAS missing values (., ._, .A-.Z).
+    """
+    if len(raw) < 8:
+        raw = raw + b"\x00" * (8 - len(raw))
 
-    Returns per-unit and per-1-SD PhenoAge shifts for all 9 biomarkers.
+    b0 = raw[0]
+    rest = raw[1:]
+
+    # SAS missing values have all trailing bytes zero and b0 in {0x2E ('.'), 0x5F ('_'), 0x41..0x5A ('A'..'Z')}
+    if rest == b"\x00\x00\x00\x00\x00\x00\x00":
+        if b0 == 0x00:
+            return 0.0
+        if b0 == 0x2E or b0 == 0x5F or (0x41 <= b0 <= 0x5A):
+            return None
+
+    sign = -1.0 if (b0 & 0x80) else 1.0
+    exponent = (b0 & 0x7F) - 64
+    mantissa_int = int.from_bytes(rest, "big")
+    if mantissa_int == 0:
+        return 0.0
+
+    # Value = sign * (mantissa_int / 2^56) * 16^exponent = sign * mantissa_int * 2^(4*exponent - 56)
+    val = math.ldexp(sign * mantissa_int, 4 * exponent - 56)
+    if not math.isfinite(val):
+        return None
+    return val
+
+
+def read_xpt_columns(path: Path, wanted_columns: Sequence[str]) -> Dict[int, Dict[str, Optional[float]]]:
     """
-    rows: List[Dict[str, object]] = []
-    for bm in BIOMARKERS:
-        per_unit_years = bm.coef / PHENOAGE_RATE
-        per_sd_years = per_unit_years * bm.reference_sd
-        rows.append(
-            {
-                "key": bm.key,
-                "name": bm.name,
-                "unit": bm.model_unit,
-                "beta": bm.coef,
-                "years_per_unit": round(per_unit_years, 4),
-                "reference_sd": bm.reference_sd,
-                "years_per_sd": round(per_sd_years, 3),
-                "abs_years_per_sd": round(abs(per_sd_years), 3),
-            }
-        )
-    rows.sort(key=lambda r: float(r["abs_years_per_sd"]), reverse=True)
+    Parse a SAS Transport (XPT v5) file and return {SEQN: {col: float_or_None}}
+    for the requested numeric columns (always keyed by integer SEQN).
+    """
+    wanted_upper = {c.upper() for c in wanted_columns}
+    wanted_upper.add("SEQN")
+    data = path.read_bytes()
+    n_bytes = len(data)
+    pos = 0
+
+    def next_card() -> bytes:
+        nonlocal pos
+        if pos + 80 > n_bytes:
+            return b""
+        card = data[pos : pos + 80]
+        pos += 80
+        return card
+
+    # Advance until NAMESTR header record
+    n_vars = 0
+    while pos < n_bytes:
+        card = next_card()
+        if card.startswith(b"HEADER RECORD*******NAMESTR HEADER RECORD!!!!!!!"):
+            # Number of variables sits at bytes 54:58 (4 ASCII digits)
+            n_vars = int(card[54:58].decode("ascii").strip())
+            break
+
+    if n_vars <= 0:
+        raise ValueError(f"Could not find NAMESTR header in {path}")
+
+    # Each NAMESTR descriptor is 140 bytes; padded to 80-byte card boundary
+    namestr_bytes_len = n_vars * 140
+    padded_len = ((namestr_bytes_len + 79) // 80) * 80
+    namestr_blob = data[pos : pos + namestr_bytes_len]
+    pos += padded_len
+
+    fields: List[Tuple[str, int, int, int]] = []  # (name, ntype, nlng, npos)
+    row_len = 0
+    for i in range(n_vars):
+        desc = namestr_blob[i * 140 : (i + 1) * 140]
+        ntype, _nhfun, nlng, _nvar0 = struct.unpack(">hhhh", desc[0:8])
+        name = desc[8:16].decode("ascii", errors="ignore").strip().upper()
+        npos = struct.unpack(">i", desc[84:88])[0]
+        end = npos + nlng
+        if end > row_len:
+            row_len = end
+        if name in wanted_upper:
+            fields.append((name, ntype, nlng, npos))
+
+    # Advance to OBS header record
+    while pos < n_bytes:
+        card = next_card()
+        if card.startswith(b"HEADER RECORD*******OBS     HEADER RECORD!!!!!!!"):
+            break
+
+    if pos >= n_bytes or row_len <= 0:
+        raise ValueError(f"Could not find OBS records in {path}")
+
+    seqn_field = next((f for f in fields if f[0] == "SEQN"), None)
+    if seqn_field is None:
+        raise ValueError(f"SEQN column missing in {path}")
+
+    other_fields = [f for f in fields if f[0] != "SEQN"]
+    obs_bytes = data[pos:]
+    n_obs = len(obs_bytes) // row_len
+
+    rows: Dict[int, Dict[str, Optional[float]]] = {}
+    _, _, seqn_len, seqn_off = seqn_field
+
+    for r in range(n_obs):
+        base = r * row_len
+        chunk = obs_bytes[base : base + row_len]
+        # Trailing padding card is ASCII spaces (0x20)
+        if chunk == b" " * row_len:
+            break
+        seqn_raw = chunk[seqn_off : seqn_off + seqn_len]
+        if seqn_raw == b" " * seqn_len:
+            break
+        seqn_val = _ibm_to_ieee_float(seqn_raw)
+        if seqn_val is None or seqn_val <= 0:
+            continue
+        seqn_id = int(round(seqn_val))
+        rec: Dict[str, Optional[float]] = {}
+        for name, ntype, nlng, npos in other_fields:
+            if ntype == 1:
+                rec[name] = _ibm_to_ieee_float(chunk[npos : npos + nlng])
+            else:
+                rec[name] = None
+        rows[seqn_id] = rec
+
     return rows
 
 
-def tornado_leverage(inputs: Dict[str, float]) -> List[Dict[str, object]]:
-    """
-    One-at-a-time modifiable leverage analysis:
-    Moves each biomarker independently from its current value to its Medicine 3.0
-    optimal target while holding chronological age and all other biomarkers fixed.
-    """
-    base = calculate_phenoage(inputs)
-    items: List[Dict[str, object]] = []
+# ---------------------------------------------------------------------------
+# 4. NCHS 2019 Public-Use Linked Mortality Fixed-Width File Parser
+# ---------------------------------------------------------------------------
 
-    for bm in BIOMARKERS:
-        modified = dict(inputs)
-        modified[bm.key] = bm.optimal
-        mod_res = calculate_phenoage(modified)
-        raw_delta = base.phenoage - mod_res.phenoage
-        reduction_years = max(0.0, raw_delta)
-        mortality_delta_pp = max(0.0, (base.mortality_10yr - mod_res.mortality_10yr) * 100.0)
-        items.append(
-            {
-                "key": bm.key,
-                "name": bm.name,
-                "current": inputs[bm.key],
-                "target": bm.optimal,
-                "unit": bm.model_unit,
-                "reduction_years": round(reduction_years, 3),
-                "mortality_delta_pp": round(mortality_delta_pp, 3),
-            }
-        )
-
-    items.sort(key=lambda x: float(x["reduction_years"]), reverse=True)
-    return items
+def read_mortality_dat(path: Path) -> Dict[int, Tuple[int, int, int]]:
+    """
+    Parse NCHS 2019 Public-Use Linked Mortality fixed-width .dat file.
+    Returns {SEQN: (eligstat, mortstat, permth_exm)} for eligible rows with
+    valid mortality status and MEC examination follow-up months.
+    """
+    records: Dict[int, Tuple[int, int, int]] = {}
+    with path.open("r", encoding="ascii", errors="ignore") as fh:
+        for line in fh:
+            if len(line) < 48:
+                continue
+            seqn_s = line[0:6].strip()
+            elig_s = line[14:15].strip()
+            mort_s = line[15:16].strip()
+            permth_exm_s = line[45:48].strip()
+            if not seqn_s.isdigit() or elig_s != "1" or mort_s not in ("0", "1"):
+                continue
+            if not permth_exm_s.isdigit():
+                continue
+            records[int(seqn_s)] = (1, int(mort_s), int(permth_exm_s))
+    return records
 
 
 # ---------------------------------------------------------------------------
-# 5. Harrell's C-Index & Synthetic NHANES-Calibrated Cohort Validation
+# 5. Exact O(n log n) Harrell's C-Index (Fenwick Tree) + O(n^2) Reference
 # ---------------------------------------------------------------------------
+
+class _FenwickTree:
+    __slots__ = ("n", "tree")
+
+    def __init__(self, n: int) -> None:
+        self.n = n
+        self.tree = [0] * (n + 1)
+
+    def add(self, idx: int, delta: int) -> None:
+        tree = self.tree
+        n = self.n
+        while idx <= n:
+            tree[idx] += delta
+            idx += idx & -idx
+
+    def prefix_sum(self, idx: int) -> int:
+        s = 0
+        tree = self.tree
+        while idx > 0:
+            s += tree[idx]
+            idx -= idx & -idx
+        return s
+
 
 def harrell_c_index(
-    times: List[float], events: List[int], risk_scores: List[float]
+    times: Sequence[float], events: Sequence[int], risk_scores: Sequence[float]
 ) -> float:
     """
-    Compute Harrell's concordance index (C-index) for right-censored survival data.
+    Exact O(n log n) Harrell's concordance index for right-censored survival data.
 
-    A pair (i, j) is comparable if event_i == 1 and time_i < time_j (or both have
-    events at identical times with different risk scores, handled via standard
-    tie rules). Concordant pairs assign a strictly higher risk score to the
-    subject with the earlier event; ties in risk score receive weight 0.5.
+    A pair (i, j) is comparable iff event_i == 1 and time_i < time_j.
+    Concordant if risk_i > risk_j; ties (risk_i == risk_j) receive weight 0.5.
     """
     n = len(times)
-    if n != len(events) or n != len(risk_scores):
-        raise ValueError("times, events, and risk_scores must have identical length")
+    if n == 0 or n != len(events) or n != len(risk_scores):
+        raise ValueError("times, events, and risk_scores must have equal non-zero length")
+
+    # Coordinate-compress risk scores to 1..m
+    unique_scores = sorted(set(risk_scores))
+    rank_of = {val: i + 1 for i, val in enumerate(unique_scores)}
+    m = len(unique_scores)
+
+    # Group indices by time descending so when processing time t, the Fenwick
+    # tree contains strictly all subjects j with time_j > t.
+    order = sorted(range(n), key=lambda idx: times[idx], reverse=True)
+    bit = _FenwickTree(m)
+    count_by_rank = [0] * (m + 1)
+    total_inserted = 0
 
     concordant = 0.0
     comparable = 0.0
 
-    # Sort by time ascending for O(n^2) clean exact computation on moderate cohorts
-    order = sorted(range(n), key=lambda idx: times[idx])
-    s_times = [times[i] for i in order]
-    s_events = [events[i] for i in order]
-    s_scores = [risk_scores[i] for i in order]
+    k = 0
+    while k < n:
+        t_cur = times[order[k]]
+        group_end = k + 1
+        while group_end < n and times[order[group_end]] == t_cur:
+            group_end += 1
 
+        # Query all events in this time group against strictly later times
+        if total_inserted > 0:
+            for p in range(k, group_end):
+                idx = order[p]
+                if events[idx] != 1:
+                    continue
+                r = rank_of[risk_scores[idx]]
+                strictly_lower = bit.prefix_sum(r - 1)
+                tied = count_by_rank[r]
+                comparable += total_inserted
+                concordant += strictly_lower + 0.5 * tied
+
+        # Insert all subjects in this time group into the tree
+        for p in range(k, group_end):
+            idx = order[p]
+            r = rank_of[risk_scores[idx]]
+            bit.add(r, 1)
+            count_by_rank[r] += 1
+            total_inserted += 1
+
+        k = group_end
+
+    return 0.5 if comparable == 0.0 else concordant / comparable
+
+
+def harrell_c_index_quadratic_reference(
+    times: Sequence[float], events: Sequence[int], risk_scores: Sequence[float]
+) -> float:
+    """Simple O(n^2) reference implementation used only to unit-verify the O(n log n) algorithm."""
+    n = len(times)
+    concordant = 0.0
+    comparable = 0.0
     for i in range(n):
-        if s_events[i] != 1:
+        if events[i] != 1:
             continue
-        ti = s_times[i]
-        si = s_scores[i]
-        for j in range(i + 1, n):
-            if s_times[j] <= ti:
+        ti = times[i]
+        si = risk_scores[i]
+        for j in range(n):
+            if times[j] > ti:
+                comparable += 1.0
+                if si > risk_scores[j]:
+                    concordant += 1.0
+                elif si == risk_scores[j]:
+                    concordant += 0.5
+    return 0.5 if comparable == 0.0 else concordant / comparable
+
+
+# ---------------------------------------------------------------------------
+# 6. Public CDC NHANES 1999-2010 Cycle Definitions & Downloader
+# ---------------------------------------------------------------------------
+
+NHANES_BASE_XPT = "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public"
+NHANES_BASE_MORT = "https://ftp.cdc.gov/pub/Health_Statistics/NCHS/datalinkage/linked_mortality"
+
+
+@dataclass(frozen=True)
+class CycleConfig:
+    label: str
+    year_dir: str
+    demo_file: str
+    biopro_file: str
+    crp_file: str
+    cbc_file: str
+    mort_file: str
+
+
+NHANES_CYCLES: Tuple[CycleConfig, ...] = (
+    CycleConfig(
+        label="1999-2000",
+        year_dir="1999",
+        demo_file="DEMO.xpt",
+        biopro_file="LAB18.xpt",
+        crp_file="LAB11.xpt",
+        cbc_file="LAB25.xpt",
+        mort_file="NHANES_1999_2000_MORT_2019_PUBLIC.dat",
+    ),
+    CycleConfig(
+        label="2001-2002",
+        year_dir="2001",
+        demo_file="DEMO_B.xpt",
+        biopro_file="L40_B.xpt",
+        crp_file="L11_B.xpt",
+        cbc_file="L25_B.xpt",
+        mort_file="NHANES_2001_2002_MORT_2019_PUBLIC.dat",
+    ),
+    CycleConfig(
+        label="2003-2004",
+        year_dir="2003",
+        demo_file="DEMO_C.xpt",
+        biopro_file="L40_C.xpt",
+        crp_file="L11_C.xpt",
+        cbc_file="L25_C.xpt",
+        mort_file="NHANES_2003_2004_MORT_2019_PUBLIC.dat",
+    ),
+    CycleConfig(
+        label="2005-2006",
+        year_dir="2005",
+        demo_file="DEMO_D.xpt",
+        biopro_file="BIOPRO_D.xpt",
+        crp_file="CRP_D.xpt",
+        cbc_file="CBC_D.xpt",
+        mort_file="NHANES_2005_2006_MORT_2019_PUBLIC.dat",
+    ),
+    CycleConfig(
+        label="2007-2008",
+        year_dir="2007",
+        demo_file="DEMO_E.xpt",
+        biopro_file="BIOPRO_E.xpt",
+        crp_file="CRP_E.xpt",
+        cbc_file="CBC_E.xpt",
+        mort_file="NHANES_2007_2008_MORT_2019_PUBLIC.dat",
+    ),
+    CycleConfig(
+        label="2009-2010",
+        year_dir="2009",
+        demo_file="DEMO_F.xpt",
+        biopro_file="BIOPRO_F.xpt",
+        crp_file="CRP_F.xpt",
+        cbc_file="CBC_F.xpt",
+        mort_file="NHANES_2009_2010_MORT_2019_PUBLIC.dat",
+    ),
+)
+
+
+def _download_cached(url: str, dest: Path) -> Path:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists() and dest.stat().st_size > 0:
+        return dest
+    req = urllib.request.Request(url, headers={"User-Agent": "MKM-NHANES-PhenoAge-Validator/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        payload = resp.read()
+    dest.write_bytes(payload)
+    return dest
+
+
+def _extract_first(rec: Dict[str, Optional[float]], names: Sequence[str]) -> Optional[float]:
+    for name in names:
+        val = rec.get(name)
+        if val is not None and math.isfinite(val):
+            return val
+    return None
+
+
+def validate_real_nhanes(cache_dir: Path) -> Dict[str, object]:
+    """
+    Download and validate Levine et al. (2018) PhenoAge on public CDC NHANES
+    1999-2010 complete-case adult participants linked to NCHS 2019 mortality.
+    """
+    all_times_full: List[float] = []
+    all_events_full: List[int] = []
+    all_times_10yr: List[float] = []
+    all_events_10yr: List[int] = []
+    all_phenoage: List[float] = []
+    all_chrono: List[float] = []
+    all_accel: List[float] = []
+
+    cycle_summaries: List[Dict[str, object]] = []
+
+    for cyc in NHANES_CYCLES:
+        cyc_dir = cache_dir / cyc.label
+        demo_path = _download_cached(
+            f"{NHANES_BASE_XPT}/{cyc.year_dir}/DataFiles/{cyc.demo_file}",
+            cyc_dir / cyc.demo_file,
+        )
+        biopro_path = _download_cached(
+            f"{NHANES_BASE_XPT}/{cyc.year_dir}/DataFiles/{cyc.biopro_file}",
+            cyc_dir / cyc.biopro_file,
+        )
+        crp_path = _download_cached(
+            f"{NHANES_BASE_XPT}/{cyc.year_dir}/DataFiles/{cyc.crp_file}",
+            cyc_dir / cyc.crp_file,
+        )
+        cbc_path = _download_cached(
+            f"{NHANES_BASE_XPT}/{cyc.year_dir}/DataFiles/{cyc.cbc_file}",
+            cyc_dir / cyc.cbc_file,
+        )
+        mort_path = _download_cached(
+            f"{NHANES_BASE_MORT}/{cyc.mort_file}",
+            cyc_dir / cyc.mort_file,
+        )
+
+        demo = read_xpt_columns(demo_path, ["RIDAGEYR"])
+        biopro = read_xpt_columns(
+            biopro_path,
+            [
+                "LBDSALSI", "LBXSAL",
+                "LBDSCRSI", "LBXSCR",
+                "LBDSGLSI", "LBXSGL",
+                "LBXSAPSI", "LBDSAPSI",
+            ],
+        )
+        crp = read_xpt_columns(crp_path, ["LBXCRP"])
+        cbc = read_xpt_columns(cbc_path, ["LBXLYPCT", "LBXMCVSI", "LBXRDW", "LBXWBCSI"])
+        mort = read_mortality_dat(mort_path)
+
+        c_times: List[float] = []
+        c_events: List[int] = []
+        c_pheno: List[float] = []
+        c_chrono: List[float] = []
+
+        for seqn, d_rec in demo.items():
+            age = d_rec.get("RIDAGEYR")
+            if age is None or age < 20.0:
                 continue
-            comparable += 1.0
-            sj = s_scores[j]
-            if si > sj:
-                concordant += 1.0
-            elif si == sj:
-                concordant += 0.5
+            m_rec = mort.get(seqn)
+            if m_rec is None:
+                continue
+            b_rec = biopro.get(seqn)
+            crp_rec = crp.get(seqn)
+            cbc_rec = cbc.get(seqn)
+            if b_rec is None or crp_rec is None or cbc_rec is None:
+                continue
 
-    if comparable == 0.0:
-        return 0.5
-    return concordant / comparable
+            # Canonical Levine (2018) units:
+            # albumin (g/L), creatinine (umol/L), glucose (mmol/L), crp (mg/dL),
+            # lymphocyte (%), mcv (fL), rdw (%), alp (U/L), wbc (10^3/uL)
+            alb = _extract_first(b_rec, ["LBDSALSI"])
+            if alb is None:
+                alb_us = _extract_first(b_rec, ["LBXSAL"])
+                alb = alb_us * 10.0 if alb_us is not None else None
 
+            crea = _extract_first(b_rec, ["LBDSCRSI"])
+            if crea is None:
+                crea_us = _extract_first(b_rec, ["LBXSCR"])
+                crea = crea_us * 88.42 if crea_us is not None else None
 
-def _sample_gompertz_time_months(xb: float, rng: random.Random) -> float:
-    """
-    Inverse-transform sampling from Gompertz survival function:
-        S(t) = exp(-((exp(gamma * t) - 1) / gamma) * exp(xb)) = U ~ Uniform(0, 1)
-        => t = (1 / gamma) * ln(1 - (gamma * ln(U)) / exp(xb))
-    """
-    u = max(1e-12, rng.random())
-    inner = 1.0 - (GAMMA * math.log(u)) / math.exp(xb)
-    return math.log(inner) / GAMMA
+            glu = _extract_first(b_rec, ["LBDSGLSI"])
+            if glu is None:
+                glu_us = _extract_first(b_rec, ["LBXSGL"])
+                glu = glu_us / 18.0182 if glu_us is not None else None
 
+            alp = _extract_first(b_rec, ["LBXSAPSI", "LBDSAPSI"])
+            crp_val = _extract_first(crp_rec, ["LBXCRP"])
+            lym = _extract_first(cbc_rec, ["LBXLYPCT"])
+            mcv = _extract_first(cbc_rec, ["LBXMCVSI"])
+            rdw = _extract_first(cbc_rec, ["LBXRDW"])
+            wbc = _extract_first(cbc_rec, ["LBXWBCSI"])
 
-def run_synthetic_nhanes_validation(
-    cohort_n: int = 1200, seed: int = 2018
-) -> Dict[str, object]:
-    """
-    Deterministic synthetic NHANES-calibrated validation harness.
+            if (
+                alb is None
+                or crea is None
+                or glu is None
+                or alp is None
+                or crp_val is None
+                or crp_val <= 0.0
+                or lym is None
+                or mcv is None
+                or rdw is None
+                or wbc is None
+            ):
+                continue
 
-    Generates an adult cohort (ages 20-85) with realistic age-correlated biomarker
-    distributions, simulates 10-year (120-month) survival outcomes from the exact
-    Gompertz hazard, applies administrative right-censoring at 120 months, and
-    evaluates Harrell's C-index for PhenoAge vs. Chronological Age alone.
+            res = calculate_phenoage(
+                {
+                    "age": age,
+                    "albumin": alb,
+                    "creatinine": crea,
+                    "glucose": glu,
+                    "crp": crp_val,
+                    "lymphocyte": lym,
+                    "mcv": mcv,
+                    "rdw": rdw,
+                    "alp": alp,
+                    "wbc": wbc,
+                }
+            )
+            if not math.isfinite(res.phenoage):
+                continue
 
-    Note: This is a reproducible synthetic simulation verifying the survival
-    mathematics and concordance pipeline; it does not redistribute raw CDC/NCHS
-    microdata.
-    """
-    rng = random.Random(seed)
-    times: List[float] = []
-    events: List[int] = []
-    phenoage_scores: List[float] = []
-    chrono_scores: List[float] = []
-    accels: List[float] = []
+            _elig, mortstat, permth_exm = m_rec
+            t_full = float(permth_exm)
+            e_full = int(mortstat)
 
-    for _ in range(cohort_n):
-        age = rng.uniform(20.0, 85.0)
-        age_centered = (age - 50.0) / 15.0
+            # 10-year (120-month) administrative censoring window
+            if t_full <= MONTHS_10YR:
+                t_10 = t_full
+                e_10 = e_full
+            else:
+                t_10 = float(MONTHS_10YR)
+                e_10 = 0
 
-        # Weakly age-correlated biomarker draws within physiological bounds
-        sample = {
-            "age": age,
-            "albumin": min(54.0, max(28.0, rng.gauss(43.0 - 0.9 * age_centered, 3.2))),
-            "creatinine": min(200.0, max(40.0, rng.gauss(78.0 + 7.5 * age_centered, 18.0))),
-            "glucose": min(13.5, max(3.5, rng.gauss(5.3 + 0.35 * age_centered, 1.1))),
-            "crp": min(3.0, max(0.01, math.exp(rng.gauss(-1.65 + 0.18 * age_centered, 0.95)))),
-            "lymphocyte": min(52.0, max(10.0, rng.gauss(30.0 - 1.5 * age_centered, 6.8))),
-            "mcv": min(108.0, max(72.0, rng.gauss(89.5 + 1.0 * age_centered, 4.8))),
-            "rdw": min(18.0, max(10.8, rng.gauss(13.1 + 0.38 * age_centered, 1.05))),
-            "alp": min(190.0, max(30.0, rng.gauss(72.0 + 5.0 * age_centered, 20.0))),
-            "wbc": min(13.5, max(2.8, rng.gauss(6.9 + 0.15 * age_centered, 1.7))),
-        }
+            c_times.append(t_full)
+            c_events.append(e_full)
+            c_pheno.append(res.phenoage)
+            c_chrono.append(age)
 
-        res = calculate_phenoage(sample)
-        event_time = _sample_gompertz_time_months(res.xb, rng)
+            all_times_full.append(t_full)
+            all_events_full.append(e_full)
+            all_times_10yr.append(t_10)
+            all_events_10yr.append(e_10)
+            all_phenoage.append(res.phenoage)
+            all_chrono.append(age)
+            all_accel.append(res.age_acceleration)
 
-        if event_time <= MONTHS_10YR:
-            times.append(event_time)
-            events.append(1)
-        else:
-            times.append(float(MONTHS_10YR))
-            events.append(0)
+        cycle_c_pheno = harrell_c_index(c_times, c_events, c_pheno)
+        cycle_c_chrono = harrell_c_index(c_times, c_events, c_chrono)
+        cycle_summaries.append(
+            {
+                "cycle": cyc.label,
+                "n": len(c_times),
+                "deaths": sum(c_events),
+                "median_followup_months": round(statistics.median(c_times), 1),
+                "c_index_phenoage": round(cycle_c_pheno, 4),
+                "c_index_chrono_age": round(cycle_c_chrono, 4),
+                "c_index_delta": round(cycle_c_pheno - cycle_c_chrono, 4),
+            }
+        )
 
-        phenoage_scores.append(res.phenoage)
-        chrono_scores.append(age)
-        accels.append(res.age_acceleration)
+    n_total = len(all_times_full)
+    deaths_full = sum(all_events_full)
+    deaths_10yr = sum(all_events_10yr)
 
-    c_pheno = harrell_c_index(times, events, phenoage_scores)
-    c_chrono = harrell_c_index(times, events, chrono_scores)
+    c_full_pheno = harrell_c_index(all_times_full, all_events_full, all_phenoage)
+    c_full_chrono = harrell_c_index(all_times_full, all_events_full, all_chrono)
 
-    # Age-stratified concordance (50-65 yrs) highlights biological signal beyond age
-    mid_idx = [i for i, a in enumerate(chrono_scores) if 50.0 <= a <= 65.0]
+    c_10yr_pheno = harrell_c_index(all_times_10yr, all_events_10yr, all_phenoage)
+    c_10yr_chrono = harrell_c_index(all_times_10yr, all_events_10yr, all_chrono)
+
+    # Mid-life subgroup (ages 50-65) where chronological age spread is narrow
+    mid_idx = [i for i, a in enumerate(all_chrono) if 50.0 <= a <= 65.0]
     c_mid_pheno = harrell_c_index(
-        [times[i] for i in mid_idx],
-        [events[i] for i in mid_idx],
-        [phenoage_scores[i] for i in mid_idx],
+        [all_times_full[i] for i in mid_idx],
+        [all_events_full[i] for i in mid_idx],
+        [all_phenoage[i] for i in mid_idx],
     )
     c_mid_chrono = harrell_c_index(
-        [times[i] for i in mid_idx],
-        [events[i] for i in mid_idx],
-        [chrono_scores[i] for i in mid_idx],
+        [all_times_full[i] for i in mid_idx],
+        [all_events_full[i] for i in mid_idx],
+        [all_chrono[i] for i in mid_idx],
     )
 
     return {
-        "cohort_n": cohort_n,
-        "seed": seed,
-        "observed_10yr_events": sum(events),
-        "observed_10yr_mortality_rate_pct": round(100.0 * sum(events) / cohort_n, 2),
-        "mean_age_acceleration_yrs": round(statistics.mean(accels), 2),
-        "sd_age_acceleration_yrs": round(statistics.stdev(accels), 2),
-        "c_index_all_ages_phenoage": round(c_pheno, 4),
-        "c_index_all_ages_chrono_age": round(c_chrono, 4),
-        "c_index_delta_all_ages": round(c_pheno - c_chrono, 4),
-        "c_index_age_50_65_phenoage": round(c_mid_pheno, 4),
-        "c_index_age_50_65_chrono_age": round(c_mid_chrono, 4),
-        "c_index_delta_age_50_65": round(c_mid_pheno - c_mid_chrono, 4),
+        "model_attribution": {
+            "authors": "Levine ME, Lu AT, Quach A, et al. (2018)",
+            "journal": "Aging (Albany NY). 2018;10(4):573-591",
+            "doi": "10.18632/aging.101414",
+            "note": (
+                "All PhenoAge Gompertz coefficients were derived and trained by Levine et al. (2018) "
+                "on NHANES III/IV. This JSON records Mohammed KM's independent survival concordance "
+                "validation of that published formula on public CDC NHANES 1999-2010 microdata linked "
+                "to the NCHS 2019 Public-Use Linked Mortality Files."
+            ),
+        },
+        "computed_at_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "data_source": {
+            "survey": "CDC Continuous NHANES",
+            "cycles": [c.label for c in NHANES_CYCLES],
+            "mortality_linkage": "NCHS 2019 Public-Use Linked Mortality Files (follow-up through Dec 31, 2019)",
+            "inclusion_criteria": "Complete-case adults age >= 20 yrs with mortality linkage (eligstat = 1), valid MEC exam follow-up (permth_exm), and all 9 required biomarkers (CRP > 0).",
+        },
+        "cohort": {
+            "n": n_total,
+            "age_min": int(min(all_chrono)),
+            "age_max": int(max(all_chrono)),
+            "mean_age_years": round(statistics.mean(all_chrono), 2),
+            "mean_phenoage_years": round(statistics.mean(all_phenoage), 2),
+            "mean_age_acceleration_years": round(statistics.mean(all_accel), 2),
+            "sd_age_acceleration_years": round(statistics.stdev(all_accel), 2),
+            "followup_median_months": round(statistics.median(all_times_full), 1),
+            "followup_median_years": round(statistics.median(all_times_full) / 12.0, 2),
+            "followup_max_months": int(max(all_times_full)),
+            "deaths_all_followup": deaths_full,
+            "mortality_rate_all_followup_pct": round(100.0 * deaths_full / n_total, 2),
+            "deaths_10yr": deaths_10yr,
+            "mortality_rate_10yr_pct": round(100.0 * deaths_10yr / n_total, 2),
+        },
+        "concordance": {
+            "full_followup": {
+                "window": "Full NCHS 2019 linked follow-up (median {:.1f} yrs)".format(
+                    statistics.median(all_times_full) / 12.0
+                ),
+                "c_index_phenoage": round(c_full_pheno, 4),
+                "c_index_chrono_age": round(c_full_chrono, 4),
+                "c_index_delta": round(c_full_pheno - c_full_chrono, 4),
+            },
+            "ten_year_window": {
+                "window": "10-year (120-month) administrative censoring",
+                "c_index_phenoage": round(c_10yr_pheno, 4),
+                "c_index_chrono_age": round(c_10yr_chrono, 4),
+                "c_index_delta": round(c_10yr_pheno - c_10yr_chrono, 4),
+            },
+            "midlife_ages_50_65": {
+                "n": len(mid_idx),
+                "deaths": sum(all_events_full[i] for i in mid_idx),
+                "c_index_phenoage": round(c_mid_pheno, 4),
+                "c_index_chrono_age": round(c_mid_chrono, 4),
+                "c_index_delta": round(c_mid_pheno - c_mid_chrono, 4),
+            },
+        },
+        "by_cycle": cycle_summaries,
     }
 
 
 # ---------------------------------------------------------------------------
-# 6. Exact Numerical Verification Suite (Matches src/model/phenoage.test.mjs)
+# 7. Exact Numerical Verification Suite (Matches src/model/phenoage.test.mjs)
 # ---------------------------------------------------------------------------
 
 def verify_model_integrity() -> Dict[str, object]:
-    """Run deterministic assertions verifying formula exactness and JS parity."""
+    """Run deterministic assertions verifying formula exactness and C-index equivalence."""
     sample = {
         "age": 50.0,
         "albumin": 43.0,
@@ -503,164 +849,129 @@ def verify_model_integrity() -> Dict[str, object]:
     assert abs(res.mortality_10yr - expected_m) < 1e-12, "M mismatch"
     assert abs(res.phenoage - expected_phenoage) < 1e-9, "PhenoAge mismatch"
 
-    # Verify ordering across reference presets
     opt = calculate_phenoage(REFERENCE_PROFILES["optimal"])
     avg = calculate_phenoage(REFERENCE_PROFILES["average"])
     elv = calculate_phenoage(REFERENCE_PROFILES["elevated"])
     assert opt.phenoage < avg.phenoage < elv.phenoage, "Preset ordering failed"
     assert opt.mortality_10yr < avg.mortality_10yr < elv.mortality_10yr, "Mortality ordering failed"
 
-    # Verify survival curve endpoints
     assert abs(survival_probability(avg.xb, 0.0) - 1.0) < 1e-12
     assert abs((1.0 - survival_probability(avg.xb, 10.0)) - avg.mortality_10yr) < 1e-5
+
+    # Cross-check O(n log n) Fenwick C-index against O(n^2) reference including ties
+    test_times = [10, 10, 20, 30, 30, 40, 50, 60, 60, 70]
+    test_events = [1, 0, 1, 1, 1, 0, 1, 1, 0, 0]
+    test_scores = [9.0, 5.0, 7.0, 7.0, 4.0, 6.0, 3.0, 2.0, 8.0, 1.0]
+    c_fast = harrell_c_index(test_times, test_events, test_scores)
+    c_ref = harrell_c_index_quadratic_reference(test_times, test_events, test_scores)
+    assert abs(c_fast - c_ref) < 1e-12, f"C-index mismatch: {c_fast} vs {c_ref}"
 
     return {
         "status": "PASS",
         "reference_sample_xb": round(res.xb, 6),
         "reference_sample_m_10yr": round(res.mortality_10yr, 6),
         "reference_sample_phenoage": round(res.phenoage, 4),
-        "preset_phenoages_at_age_45": {
-            "optimal": round(opt.phenoage, 2),
-            "average": round(avg.phenoage, 2),
-            "elevated": round(elv.phenoage, 2),
-        },
+        "c_index_fast_vs_quadratic_diff": abs(c_fast - c_ref),
     }
 
 
-# ---------------------------------------------------------------------------
-# 7. CLI Entry Point
-# ---------------------------------------------------------------------------
-
-def build_report(cohort_n: int, seed: int) -> Dict[str, object]:
-    verification = verify_model_integrity()
-    sensitivities = analytical_sensitivities()
-    tornado_elevated = tornado_leverage(REFERENCE_PROFILES["elevated"])
-    tornado_average = tornado_leverage(REFERENCE_PROFILES["average"])
-    synthetic_validation = run_synthetic_nhanes_validation(cohort_n=cohort_n, seed=seed)
-
-    return {
-        "model": "Levine et al. (2018) PhenoAge Gompertz Proportional-Hazards Model",
-        "verification": verification,
-        "nhanes_validation_methodology": NHANES_VALIDATION_SUMMARY,
-        "analytical_sensitivities": sensitivities,
-        "tornado_leverage_average_45yr": tornado_average,
-        "tornado_leverage_elevated_45yr": tornado_elevated,
-        "synthetic_cohort_c_index_check": synthetic_validation,
-    }
-
-
-def print_human_report(report: Dict[str, object]) -> None:
-    ver = report["verification"]
-    pub = report["nhanes_validation_methodology"]["validation_cohort"]["published_metrics"]
-    sim = report["synthetic_cohort_c_index_check"]
+def print_human_report(results: Dict[str, object]) -> None:
+    cohort = results["cohort"]
+    conc = results["concordance"]
+    full = conc["full_followup"]
+    ten = conc["ten_year_window"]
+    mid = conc["midlife_ages_50_65"]
 
     print("=" * 78)
-    print("LEVINE ET AL. (2018) PHENOAGE — GOMPERTZ SURVIVAL VALIDATION & SENSITIVITY")
+    print("REAL CDC NHANES (1999-2010) SURVIVAL VALIDATION OF LEVINE ET AL. (2018)")
     print("=" * 78)
-    print(f"Formula Verification : {ver['status']}")
+    print(f"Cycles Validated     : {', '.join(results['data_source']['cycles'])}")
+    print(f"Complete-Case Adults : n = {cohort['n']:,} (ages {cohort['age_min']}-{cohort['age_max']} yrs)")
     print(
-        f"Reference Check (50y): xb={ver['reference_sample_xb']}, "
-        f"M_10yr={ver['reference_sample_m_10yr']:.4%}, "
-        f"PhenoAge={ver['reference_sample_phenoage']} yrs"
+        f"Follow-Up (NCHS 2019): median {cohort['followup_median_months']} mo "
+        f"({cohort['followup_median_years']} yrs), max {cohort['followup_max_months']} mo"
     )
-    presets = ver["preset_phenoages_at_age_45"]
     print(
-        f"Age-45 Presets       : Optimal={presets['optimal']} yrs | "
-        f"Average={presets['average']} yrs | Elevated={presets['elevated']} yrs"
+        f"Observed Deaths      : {cohort['deaths_all_followup']:,} all follow-up "
+        f"({cohort['mortality_rate_all_followup_pct']}%) | "
+        f"{cohort['deaths_10yr']:,} within 10 yrs ({cohort['mortality_rate_10yr_pct']}%)"
     )
     print()
-
-    print("1. ANALYTICAL SENSITIVITY (dPhenoAge/dx = beta / 0.090165)")
+    print("HARRELL'S C-INDEX (OBSERVED ALL-CAUSE MORTALITY)")
     print("-" * 78)
-    print(f"{'Biomarker':<28} {'Beta':>9} {'Yrs/Unit':>10} {'Ref SD':>8} {'Yrs/1-SD':>10}")
-    for row in report["analytical_sensitivities"]:
+    print(
+        f"Full Follow-Up       : PhenoAge = {full['c_index_phenoage']:.4f} vs "
+        f"Chrono Age = {full['c_index_chrono_age']:.4f} (delta = {full['c_index_delta']:+.4f})"
+    )
+    print(
+        f"10-Year Window       : PhenoAge = {ten['c_index_phenoage']:.4f} vs "
+        f"Chrono Age = {ten['c_index_chrono_age']:.4f} (delta = {ten['c_index_delta']:+.4f})"
+    )
+    print(
+        f"Mid-Life (50-65 yrs) : PhenoAge = {mid['c_index_phenoage']:.4f} vs "
+        f"Chrono Age = {mid['c_index_chrono_age']:.4f} (delta = {mid['c_index_delta']:+.4f}, "
+        f"n={mid['n']:,}, deaths={mid['deaths']:,})"
+    )
+    print()
+    print("PER-CYCLE BREAKDOWN")
+    print("-" * 78)
+    print(f"{'Cycle':<12} {'N':>7} {'Deaths':>7} {'Med Mo':>8} {'C(Pheno)':>10} {'C(Age)':>10} {'Delta':>9}")
+    for row in results["by_cycle"]:
         print(
-            f"{row['name']:<28} {row['beta']:>+9.5f} {row['years_per_unit']:>+10.4f} "
-            f"{row['reference_sd']:>8.2f} {row['years_per_sd']:>+10.3f}"
+            f"{row['cycle']:<12} {row['n']:>7,} {row['deaths']:>7,} {row['median_followup_months']:>8.1f} "
+            f"{row['c_index_phenoage']:>10.4f} {row['c_index_chrono_age']:>10.4f} {row['c_index_delta']:>+9.4f}"
         )
-    print()
-
-    print("2. MODIFIABLE LEVERAGE TORNADO — ELEVATED METABOLIC RISK (AGE 45)")
-    print("-" * 78)
-    print(f"{'Biomarker':<28} {'Current':>9} {'Target':>9} {'Delta Yrs':>11} {'10y Mort pp':>12}")
-    for row in report["tornado_leverage_elevated_45yr"]:
-        print(
-            f"{row['name']:<28} {row['current']:>9.2f} {row['target']:>9.2f} "
-            f"{-row['reduction_years']:>+11.2f} {-row['mortality_delta_pp']:>+12.2f}"
-        )
-    print()
-
-    print("3. PUBLISHED NHANES III / IV VALIDATION BENCHMARKS (LEVINE & LIU 2018)")
-    print("-" * 78)
-    print("  Training Cohort    : NHANES III (1988-1994), n = 9,926 adults (20+ yrs)")
-    print("  Validation Cohort  : NHANES IV (1999-2010), n = 11,432 adults (20+ yrs)")
-    print(
-        f"  Published C-Index  : PhenoAge = {pub['all_cause_mortality_c_index_phenoage']:.3f} "
-        f"vs. Chronological Age = {pub['all_cause_mortality_c_index_chrono_age']:.3f}"
-    )
-    print(
-        f"  10-Year ROC AUC    : {pub['ten_year_mortality_roc_auc_phenoage']:.2f} "
-        f"(HR per +1 yr PhenoAgeAccel ~ {pub['hazard_ratio_per_year_phenoage_accel']:.2f})"
-    )
-    print()
-
-    print("4. SYNTHETIC NHANES-CALIBRATED COHORT CONCORDANCE CHECK (REPRODUCIBLE)")
-    print("-" * 78)
-    print(
-        f"  Simulated Cohort   : n = {sim['cohort_n']} (seed={sim['seed']}), "
-        f"10-yr events = {sim['observed_10yr_events']} ({sim['observed_10yr_mortality_rate_pct']}%)"
-    )
-    print(
-        f"  All Ages (20-85y)  : PhenoAge C-index = {sim['c_index_all_ages_phenoage']:.4f} | "
-        f"Chrono Age = {sim['c_index_all_ages_chrono_age']:.4f} "
-        f"(delta = {sim['c_index_delta_all_ages']:+.4f})"
-    )
-    print(
-        f"  Mid-Life (50-65y)  : PhenoAge C-index = {sim['c_index_age_50_65_phenoage']:.4f} | "
-        f"Chrono Age = {sim['c_index_age_50_65_chrono_age']:.4f} "
-        f"(delta = {sim['c_index_delta_age_50_65']:+.4f})"
-    )
     print("=" * 78)
 
 
 def main() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(
-        description="Levine et al. (2018) PhenoAge Gompertz survival validation & sensitivity script."
+        description="Real CDC NHANES (1999-2010) survival validation of Levine et al. (2018) PhenoAge."
     )
     parser.add_argument(
         "--verify",
         action="store_true",
-        help="Run formula integrity assertions only and exit 0 on pass.",
+        help="Run formula integrity and C-index unit assertions only.",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=repo_root / ".cache" / "nhanes",
+        help="Local cache directory for downloaded CDC XPT and NCHS mortality files.",
+    )
+    parser.add_argument(
+        "--write-json",
+        action="store_true",
+        help="Write computed validation JSON to src/data/nhanes_validation_results.json.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=repo_root / "src" / "data" / "nhanes_validation_results.json",
+        help="Output JSON path when --write-json is set.",
     )
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Emit full validation and sensitivity report as JSON.",
-    )
-    parser.add_argument(
-        "--cohort-n",
-        type=int,
-        default=1200,
-        help="Synthetic validation cohort size (default: 1200).",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=2018,
-        help="Deterministic PRNG seed for synthetic cohort simulation (default: 2018).",
+        help="Print validation JSON to stdout.",
     )
     args = parser.parse_args()
 
+    verify_res = verify_model_integrity()
     if args.verify:
-        result = verify_model_integrity()
-        print(json.dumps(result, indent=2))
+        print(json.dumps(verify_res, indent=2))
         return
 
-    report = build_report(cohort_n=args.cohort_n, seed=args.seed)
+    results = validate_real_nhanes(args.cache_dir)
+    if args.write_json:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+
     if args.json:
-        print(json.dumps(report, indent=2))
+        print(json.dumps(results, indent=2))
     else:
-        print_human_report(report)
+        print_human_report(results)
 
 
 if __name__ == "__main__":
