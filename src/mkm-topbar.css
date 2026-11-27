@@ -67,3 +67,6 @@
   min-width: 0;
   text-wrap: balance;
 }
+
+/* Straight typography only: no random italics */
+em, i, cite, q, blockquote { font-style: normal !important; }
