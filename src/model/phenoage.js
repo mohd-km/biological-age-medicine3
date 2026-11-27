@@ -37,6 +37,7 @@ export const MODEL_CONSTANTS = Object.freeze({
 export const BIOMARKERS = Object.freeze([
   {
     key: 'albumin',
+    plain: 'The main protein in your blood, made by the liver. Higher usually means good nutrition and low inflammation.',
     name: 'Albumin',
     shortName: 'Albumin',
     domain: 'Hepatic & Nutritional',
@@ -61,6 +62,7 @@ export const BIOMARKERS = Object.freeze([
   },
   {
     key: 'creatinine',
+    plain: 'A waste product from muscles that the kidneys filter out. Shows how well the kidneys are cleaning the blood.',
     name: 'Creatinine',
     shortName: 'Creatinine',
     domain: 'Renal Filtration',
@@ -85,6 +87,7 @@ export const BIOMARKERS = Object.freeze([
   },
   {
     key: 'glucose',
+    plain: 'Blood sugar after not eating overnight. Higher values point toward diabetes risk.',
     name: 'Fasting Glucose',
     shortName: 'Glucose',
     domain: 'Glycemic Control',
@@ -109,6 +112,7 @@ export const BIOMARKERS = Object.freeze([
   },
   {
     key: 'crp',
+    plain: 'A protein the liver releases during inflammation. Low means the body is calm.',
     name: 'C-Reactive Protein (hs-CRP)',
     shortName: 'hs-CRP',
     domain: 'Systemic Inflammation',
@@ -134,6 +138,7 @@ export const BIOMARKERS = Object.freeze([
   },
   {
     key: 'lymphocyte',
+    plain: "The share of white blood cells that are the immune system's trained defenders. It tends to fall with age and stress.",
     name: 'Lymphocyte Percent',
     shortName: 'Lymphocyte %',
     domain: 'Adaptive Immunity',
@@ -158,6 +163,7 @@ export const BIOMARKERS = Object.freeze([
   },
   {
     key: 'mcv',
+    plain: 'The average size of your red blood cells. Larger cells can mean low B12 or folate, or an aging bone marrow.',
     name: 'Mean Cell Volume (MCV)',
     shortName: 'MCV',
     domain: 'Erythropoiesis',
@@ -182,6 +188,7 @@ export const BIOMARKERS = Object.freeze([
   },
   {
     key: 'rdw',
+    plain: 'How much your red blood cells vary in size. Uneven sizes are one of the strongest warning signs in a routine blood test.',
     name: 'Red Cell Distribution Width (RDW)',
     shortName: 'RDW',
     domain: 'Hematologic Stability',
@@ -206,6 +213,7 @@ export const BIOMARKERS = Object.freeze([
   },
   {
     key: 'alp',
+    plain: 'An enzyme from the liver and bones. High values hint at liver or bone stress.',
     name: 'Alkaline Phosphatase (ALP)',
     shortName: 'ALP',
     domain: 'Hepatobiliary & Bone',
@@ -230,6 +238,7 @@ export const BIOMARKERS = Object.freeze([
   },
   {
     key: 'wbc',
+    plain: 'Your total white blood cell count. Even inside the normal range, higher values signal ongoing inflammation.',
     name: 'White Blood Cell Count (WBC)',
     shortName: 'WBC',
     domain: 'Innate Immunity',
@@ -260,7 +269,7 @@ export const PRESETS = Object.freeze({
   optimal: {
     id: 'optimal',
     label: 'Optimal Longevity Profile',
-    tag: 'Medicine 3.0 Target',
+    tag: 'Longevity targets',
     description: 'Low systemic inflammation, tight fasting glycemia, high albumin reserve, and low erythrocyte heterogeneity.',
     values: {
       age: 45,
@@ -278,7 +287,7 @@ export const PRESETS = Object.freeze({
   average: {
     id: 'average',
     label: 'Average Adult',
-    tag: 'NHANES Population Baseline',
+    tag: 'Typical US adult',
     description: 'Representative mid-life adult within standard clinical reference intervals across all 9 biomarkers.',
     values: {
       age: 45,
@@ -296,7 +305,7 @@ export const PRESETS = Object.freeze({
   elevated: {
     id: 'elevated',
     label: 'Elevated Metabolic Risk',
-    tag: 'Accelerated Aging Signal',
+    tag: 'Faster aging signal',
     description: 'Impaired fasting glucose, subclinical inflammation, elevated RDW and leukocytes, and reduced albumin.',
     values: {
       age: 45,
@@ -479,23 +488,23 @@ export function getBiomarkerStatus(bm, canonicalValue) {
   const [refMin, refMax] = bm.clinicalRef;
 
   if (canonicalValue >= optMin && canonicalValue <= optMax) {
-    return { code: 'optimal', label: 'Optimal' };
+    return { code: 'optimal', label: 'On target' };
   }
   if (bm.direction === 'lower') {
     if (canonicalValue < optMin && canonicalValue >= refMin * 0.85) {
-      return { code: 'optimal', label: 'Optimal' };
+      return { code: 'optimal', label: 'On target' };
     }
     if (canonicalValue <= refMax) {
-      return { code: 'normal', label: 'Standard Ref' };
+      return { code: 'normal', label: 'Normal range' };
     }
     return { code: 'elevated', label: 'Elevated Risk' };
   } else {
     // higher is protective (albumin, lymphocyte)
     if (canonicalValue > optMax && canonicalValue <= refMax * 1.1) {
-      return { code: 'optimal', label: 'Optimal' };
+      return { code: 'optimal', label: 'On target' };
     }
     if (canonicalValue >= refMin) {
-      return { code: 'normal', label: 'Standard Ref' };
+      return { code: 'normal', label: 'Normal range' };
     }
     return { code: 'elevated', label: 'Suboptimal' };
   }

@@ -1655,3 +1655,37 @@ h3 {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* Plain-English 3-beat story card and biomarker explainers */
+.story-card {
+  max-width: 100%;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.story-card p { margin: 0; font-size: 0.88rem; line-height: 1.5; color: var(--ink-secondary); max-width: 95ch; }
+.story-k {
+  display: inline-block;
+  min-width: 7.5em;
+  margin-right: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.story-card .story-try { color: var(--ink-primary); }
+.story-card .story-try .story-k { color: var(--accent); }
+.bm-plain {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}

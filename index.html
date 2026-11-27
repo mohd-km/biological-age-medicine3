@@ -52,10 +52,10 @@
       <header class="masthead">
         <div class="masthead-top">
           <div class="masthead-meta">
-            <span class="privacy-pill">100% Client-Side &middot; Zero Data Leaves Browser</span>
+            <span class="privacy-pill">Private: your numbers never leave this browser</span>
           </div>
           <div class="masthead-controls">
-            <div class="unit-toggle" role="group" aria-label="Laboratory Unit System">
+            <div class="unit-toggle" role="group" aria-label="Lab report units">
               <button type="button" class="unit-btn active" data-unit="SI" aria-pressed="true">
                 SI <span class="unit-sub">mmol/L, g/L</span>
               </button>
@@ -71,19 +71,25 @@
             <div class="masthead-heading-copy">
               <h1>Biological Age &amp; Medicine 3.0 Survival Model</h1>
               <p class="subtitle">
-                Playable Levine et al. (2018) PhenoAge survival simulator with private 3-marker optimization
-                and independent CDC NHANES validation (n = 28,316).
+                How old does your body look from a routine blood test? Move the sliders to see your biological age,
+                which results matter most, and what small changes would do.
               </p>
             </div>
           </div>
         </div>
 
         <div class="disclaimer-line" role="note" aria-label="Medical Disclaimer">
-          <strong>Educational tool only:</strong> Published epidemiological survival model for self-study; not a medical device or clinical diagnosis.
+          <strong>For learning only:</strong> a published research formula, not a medical device or a diagnosis. Talk to your doctor about your own results.
         </div>
       </header>
 
       <main class="main-content">
+        <section class="story-card" aria-label="What this page does">
+          <p><span class="story-k">The problem</span>Two people can both be 45 yet be aging at very different speeds. A birthday cannot show that; a routine blood test can.</p>
+          <p><span class="story-k">How it works</span>PhenoAge is a published formula (Levine et al., 2018) that turns 9 routine blood results plus your age into a "biological age": the age at which an average person has the same risk of dying in the next 10 years as you. Model card: a Gompertz survival model trained on a large US health survey. In our own check on 28,316 US adults followed for a median of 13 years, it picked who died sooner better than age alone (details below).</p>
+          <p class="story-try"><span class="story-k">Try this first</span>Click "Elevated Metabolic Risk" just below: at the same age of 45, biological age jumps from 43.1 to 62.4 and the 10-year risk of dying rises from 2.50% to 13.48%.</p>
+        </section>
+
         <!-- Compact Preset Strip -->
         <section class="preset-bar" aria-label="Reference Cohort Presets">
           <div class="preset-grid" id="preset-grid"></div>
@@ -95,8 +101,8 @@
           <div class="card gauge-panel">
             <div class="panel-header compact">
               <div>
-                <div class="section-kicker">Live PhenoAge Dial</div>
-                <h2>Biological vs. Chronological Age</h2>
+                <div class="section-kicker">Your biological age (PhenoAge)</div>
+                <h2>Blood-test age vs. birthday age</h2>
               </div>
               <span class="kpi-badge" id="out-accel-badge">--</span>
             </div>
@@ -105,23 +111,24 @@
 
             <div class="kpi-strip">
               <div class="kpi-stat">
-                <div class="kpi-label">Age Accel</div>
+                <div class="kpi-label">Older or younger than your age</div>
                 <div class="kpi-stat-value" id="out-accel">--</div>
+                <div class="kpi-sub">Age acceleration; minus is good</div>
               </div>
               <div class="kpi-stat">
-                <div class="kpi-label">10-Yr Mortality</div>
+                <div class="kpi-label">Risk of dying in 10 years</div>
                 <div class="kpi-stat-value" id="out-mortality">--</div>
-                <div class="kpi-sub" id="out-mortality-ref">Ref: --</div>
+                <div class="kpi-sub" id="out-mortality-ref">Typical for your age: --</div>
               </div>
               <div class="kpi-stat">
-                <div class="kpi-label">Rel. Hazard</div>
+                <div class="kpi-label">Risk vs. typical (hazard ratio)</div>
                 <div class="kpi-stat-value" id="out-hr">--</div>
-                <div class="kpi-sub">vs. age baseline</div>
+                <div class="kpi-sub">1.00x = a typical person your age</div>
               </div>
               <div class="kpi-stat">
-                <div class="kpi-label">Log-Hazard (xb)</div>
+                <div class="kpi-label">Raw risk score (xb)</div>
                 <div class="kpi-stat-value" id="out-xb">--</div>
-                <div class="kpi-sub">Gompertz score</div>
+                <div class="kpi-sub">Weighted sum of your results; higher is riskier</div>
               </div>
             </div>
           </div>
@@ -131,14 +138,14 @@
             <div class="card chart-panel">
               <div class="panel-header compact">
                 <div>
-                  <div class="section-kicker">10-Year Gompertz Trajectory</div>
-                  <h2>Projected Survival Probability S(t)</h2>
+                  <div class="section-kicker">The next 10 years</div>
+                  <h2>Chance of still being alive, year by year</h2>
                 </div>
                 <div class="chart-legend">
-                  <span class="legend-item"><span class="swatch swatch-current"></span>Current</span>
-                  <span class="legend-item"><span class="swatch swatch-whatif"></span>What-If Plan</span>
-                  <span class="legend-item"><span class="swatch swatch-baseline"></span>Age Baseline</span>
-                  <span class="legend-item"><span class="swatch swatch-optimal"></span>Optimal</span>
+                  <span class="legend-item"><span class="swatch swatch-current"></span>You now</span>
+                  <span class="legend-item"><span class="swatch swatch-whatif"></span>With the plan</span>
+                  <span class="legend-item"><span class="swatch swatch-baseline"></span>Typical for your age</span>
+                  <span class="legend-item"><span class="swatch swatch-optimal"></span>All results on target</span>
                 </div>
               </div>
               <div class="survival-chart-wrap" id="survival-chart"></div>
@@ -148,8 +155,8 @@
             <div class="card optimizer-panel" aria-label="Private What-If Optimizer">
               <div class="panel-header compact">
                 <div>
-                  <div class="section-kicker">Private &ldquo;What-If&rdquo; Optimizer</div>
-                  <h2 id="optimizer-heading">Exact 3 Marker Shifts to Drop 3 Biological Years</h2>
+                  <div class="section-kicker">What if? Private, runs in your browser</div>
+                  <h2 id="optimizer-heading">The 3 smallest changes that take 3 years off</h2>
                 </div>
                 <div class="target-pills" role="group" aria-label="Target biological age reduction">
                   <button type="button" class="target-pill" data-drop="1" aria-pressed="false">-1 yr</button>
@@ -159,23 +166,23 @@
               </div>
 
               <p class="optimizer-summary" id="optimizer-summary">
-                Calculating minimal shifts across your 3 highest-leverage biomarkers...
+                Finding the smallest changes across your 3 most powerful results...
               </p>
 
               <div class="optimizer-shifts" id="optimizer-shifts"></div>
 
               <div class="optimizer-actions">
                 <button type="button" class="primary-btn" id="btn-apply-optimizer">
-                  Apply 3-Marker Plan
+                  Apply this plan
                 </button>
                 <button type="button" class="ghost-btn hidden" id="btn-undo-optimizer">
-                  Undo Plan
+                  Undo plan
                 </button>
                 <button type="button" class="secondary-btn" id="btn-download-md">
-                  Download Markdown Summary
+                  Download summary (text)
                 </button>
                 <button type="button" class="secondary-btn" id="btn-print-summary">
-                  Print / PDF Doctor Brief
+                  Print a summary for your doctor
                 </button>
               </div>
             </div>
@@ -188,11 +195,11 @@
           <div class="card biomarkers-panel">
             <div class="panel-header compact">
               <div>
-                <div class="section-kicker">Interactive Lab Panel</div>
-                <h2>Age &amp; 9 Routine Biomarkers</h2>
+                <div class="section-kicker">Your blood test</div>
+                <h2>Your age and 9 routine blood results</h2>
               </div>
               <button type="button" class="ghost-btn" id="btn-apply-all-optimal">
-                Snap All to Optimal
+                Set all to target
               </button>
             </div>
 
@@ -200,8 +207,8 @@
             <div class="age-control-card">
               <div class="biomarker-top">
                 <div class="bm-title-group">
-                  <span class="bm-name">Chronological Age</span>
-                  <span class="bm-domain">Baseline Anchor (+0.0804 / yr)</span>
+                  <span class="bm-name">Age (birthday age)</span>
+                  <span class="bm-domain">Each extra year adds about 8% to risk (+0.0804 / yr)</span>
                 </div>
                 <div class="bm-input-group">
                   <input
@@ -231,7 +238,7 @@
               </div>
               <div class="slider-scale">
                 <span>18 yrs</span>
-                <span>Chronological baseline</span>
+                <span>birthday age</span>
                 <span>95 yrs</span>
               </div>
             </div>
@@ -243,15 +250,15 @@
           <div class="card tornado-panel">
             <div class="panel-header compact">
               <div>
-                <div class="section-kicker">Single-Marker Leverage</div>
-                <h2>Modifiable Years by Marker</h2>
+                <div class="section-kicker">Biggest wins first</div>
+                <h2>Years you could take off, one result at a time</h2>
               </div>
               <div class="tornado-summary-pill" id="tornado-total-pill">
-                Gain: -- yrs
+                Total: -- yrs
               </div>
             </div>
             <p class="panel-intro">
-              Click any bar to snap that single biomarker to its Medicine 3.0 target.
+              Each bar shows how many biological years you would lose by moving just that one result to its target. Click a bar to try it.
             </p>
             <div class="tornado-chart" id="tornado-chart"></div>
           </div>
@@ -263,8 +270,8 @@
           <details class="editorial-drawer" id="drawer-math">
             <summary class="drawer-summary">
               <div class="drawer-summary-left">
-                <span class="section-kicker">Levine et al. (2018) Exact Equations</span>
-                <span class="drawer-title">Gompertz Survival Math, Live Coefficient Audit &amp; Medicine 3.0 Rationale</span>
+                <span class="section-kicker">Levine et al. (2018) exact equations</span>
+                <span class="drawer-title">The formula, step by step, with your numbers plugged in</span>
               </div>
               <div class="drawer-summary-right">
                 <span class="mono-pill" id="drawer-math-pill">xb = --</span>
@@ -274,6 +281,12 @@
 
             <div class="drawer-body">
               <p class="drawer-note">
+                <strong>In plain words:</strong> (1) each blood result is multiplied by a weight and added up into a risk score, xb.
+                (2) The Gompertz pattern, where an adult's risk of dying rises exponentially with age (in this model about 8% per year,
+                so it roughly doubles every 8.6 years), turns that score into a risk of dying within 10 years, M.
+                (3) That risk is turned back into the age at which an average person has the same risk. That age is your PhenoAge.
+              </p>
+              <p class="drawer-note">
                 <strong>Model attribution:</strong> All ten PhenoAge Gompertz coefficients were derived and trained by
                 Levine et al. (2018, <em>Aging</em> 10(4):573-591,
                 <a href="https://doi.org/10.18632/aging.101414" target="_blank" rel="noopener noreferrer">doi:10.18632/aging.101414</a>)
@@ -282,7 +295,7 @@
 
               <div class="formula-grid">
                 <div class="formula-card">
-                  <div class="formula-step">1. Linear Predictor (xb)</div>
+                  <div class="formula-step">1. Risk score (linear predictor, xb)</div>
                   <pre class="formula-code">xb = -19.9067
    - 0.0336 * Albumin (g/L)
    + 0.0095 * Creatinine (umol/L)
@@ -298,7 +311,7 @@
                 </div>
 
                 <div class="formula-card">
-                  <div class="formula-step">2. 10-Year Mortality Score (M)</div>
+                  <div class="formula-step">2. Risk of dying within 10 years (M)</div>
                   <pre class="formula-code">M = 1 - exp( (-1.51714 * exp(xb)) / 0.0076927 )
 
 gamma = 0.0076927 month^-1
@@ -307,7 +320,7 @@ exp(120 * gamma) - 1 = 1.51714</pre>
                 </div>
 
                 <div class="formula-card">
-                  <div class="formula-step">3. Phenotypic Age Conversion</div>
+                  <div class="formula-step">3. Turn the risk back into an age</div>
                   <pre class="formula-code">PhenoAge = 141.50225
          + ln( -0.00553 * ln(1 - M) ) / 0.090165
 
@@ -317,18 +330,18 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
               </div>
 
               <div class="drawer-subhead">
-                <h3>Live Coefficient Breakdown for Current Inputs</h3>
+                <h3>How much each result adds to your risk score</h3>
               </div>
               <div class="table-wrap">
                 <table class="coef-table">
                   <thead>
                     <tr>
-                      <th>Variable</th>
-                      <th>Model Unit</th>
-                      <th>Coefficient</th>
-                      <th>Current Input</th>
-                      <th>Contribution to xb</th>
-                      <th>Biological Mechanism</th>
+                      <th>Result</th>
+                      <th>Unit</th>
+                      <th>Weight (coefficient)</th>
+                      <th>Your value</th>
+                      <th>Adds to risk score (xb)</th>
+                      <th>What it reflects</th>
                     </tr>
                   </thead>
                   <tbody id="coef-table-body"></tbody>
@@ -336,9 +349,10 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
               </div>
 
               <div class="medicine30-note">
-                <strong>Why reference ranges are not targets:</strong> Standard lab intervals cover the central 95% of an aging population.
-                Inside those &ldquo;normal&rdquo; bounds, small upward shifts in glucose, RDW, hs-CRP, and WBC compound exponentially
-                in the Gompertz hazard years before clinical disease is diagnosed.
+                <strong>Why "normal" is not the same as "target":</strong> a lab's normal range simply covers the middle 95% of people,
+                many of whom are already aging badly. Inside that range, small rises in blood sugar, RDW, CRP and white cells still
+                multiply risk, years before any disease is diagnosed. The targets here follow the prevention-first approach
+                sometimes called Medicine 3.0.
               </div>
             </div>
           </details>
@@ -347,8 +361,8 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
           <details class="editorial-drawer" id="drawer-nhanes">
             <summary class="drawer-summary">
               <div class="drawer-summary-left">
-                <span class="section-kicker">Independent Real Microdata Check</span>
-                <span class="drawer-title">CDC NHANES 1999-2010 Linked Mortality Validation (n = 28,316)</span>
+                <span class="section-kicker">Checked against real people</span>
+                <span class="drawer-title">Tested on 28,316 US adults followed for years (CDC NHANES 1999-2010)</span>
               </div>
               <div class="drawer-summary-right">
                 <span class="mono-pill">C-index 0.8645 vs 0.8484</span>
@@ -359,7 +373,7 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
             <div class="drawer-body">
               <div class="v2-validation-grid">
                 <div class="equation-breakdown-card">
-                  <h3>Observed All-Cause Mortality Concordance (1999-2010)</h3>
+                  <h3>Did it predict who died sooner?</h3>
                   <p class="validation-lead" id="val-summary-lead">
                     Loading computed NHANES validation summary...
                   </p>
@@ -368,16 +382,16 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
 
                 <div class="github-inspect-card">
                   <div>
-                    <div class="section-kicker">Reproducible Audit Pipeline</div>
-                    <h3>Validation Script &amp; Committed JSON</h3>
+                    <div class="section-kicker">Check it yourself</div>
+                    <h3>The analysis code and its results</h3>
                     <p class="github-inspect-copy">
-                      Every number below is computed directly from public CDC NHANES XPT lab files and
-                      NCHS 2019 Linked Mortality Files using a zero-dependency Python 3 script.
+                      Every number here comes straight from the public CDC NHANES lab files and the
+                      national death-record linkage (NCHS 2019), using one short Python script anyone can rerun.
                     </p>
                     <ul class="github-meta-list">
                       <li><code>analysis/nhanes_phenoage_validation.py</code> &mdash; exact Harrell's C-index on CDC XPT + NCHS mortality files</li>
                       <li><code>src/data/nhanes_validation_results.json</code> &mdash; committed build-time validation data</li>
-                      <li>Formula parity verified against client-side JS tests (<code>&lt; 1e-9</code> tolerance)</li>
+                      <li>The formula on this page matches the analysis script to 9 decimal places, checked by automated tests</li>
                     </ul>
                   </div>
                   <div class="github-cta-row">
@@ -387,14 +401,14 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      Inspect Validation Script on GitHub &rarr;
+                      See the analysis script on GitHub &rarr;
                     </a>
                   </div>
                 </div>
               </div>
 
               <div class="drawer-subhead">
-                <h3>Per-Cycle NHANES Survival Validation Breakdown</h3>
+                <h3>Results for each survey wave</h3>
                 <p class="table-caption" id="val-table-caption">
                   Complete-case adults age &ge; 20 years linked to NCHS 2019 Public-Use Linked Mortality Files.
                 </p>
@@ -403,13 +417,13 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
                 <table class="coef-table validation-table">
                   <thead>
                     <tr>
-                      <th>NHANES Cycle</th>
-                      <th>Adults (n)</th>
-                      <th>Observed Deaths</th>
-                      <th>Median Follow-Up</th>
-                      <th>C-Index (PhenoAge)</th>
-                      <th>C-Index (Chrono Age)</th>
-                      <th>Delta</th>
+                      <th>Survey years</th>
+                      <th>Adults</th>
+                      <th>Deaths</th>
+                      <th>Typical follow-up</th>
+                      <th>Ranking score: PhenoAge</th>
+                      <th>Ranking score: age alone</th>
+                      <th>Gain</th>
                     </tr>
                   </thead>
                   <tbody id="val-cycle-tbody"></tbody>

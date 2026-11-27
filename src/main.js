@@ -179,7 +179,7 @@ function drawBioAgeGauge(displayedPhenoAge, chronoAge) {
       <text x="${cx}" y="${cy + 36}" text-anchor="middle" fill="#111111"
         font-size="38" font-weight="500" font-family="JetBrains Mono, monospace">${displayedPhenoAge.toFixed(1)}</text>
       <text x="${cx}" y="${cy + 55}" text-anchor="middle" fill="#555555"
-        font-size="12" font-family="Inter, sans-serif">PhenoAge yrs &middot; vs. ${chronoAge.toFixed(0)} chrono (${sign}${accel.toFixed(1)})</text>
+        font-size="12" font-family="Inter, sans-serif">biological age &middot; you are ${chronoAge.toFixed(0)} (${sign}${accel.toFixed(1)})</text>
     </svg>
   `;
 }
@@ -232,15 +232,19 @@ function renderNhanesValidation() {
   const cycleSpan = `${src.cycles[0].split('-')[0]}-${src.cycles[src.cycles.length - 1].split('-')[1]}`;
 
   valSummaryLeadEl.textContent =
-    `Independent evaluation across ${src.cycles.length} public CDC NHANES cycles (${cycleSpan}), ` +
-    `covering n = ${cohort.n.toLocaleString('en-US')} complete-case adults (ages ${cohort.age_min}-${cohort.age_max}) ` +
-    `linked to NCHS 2019 Public-Use Linked Mortality Files.`;
+    `NHANES is a large US government health survey. ${cohort.n.toLocaleString('en-US')} adults aged ${cohort.age_min} to ${cohort.age_max} ` +
+    `from ${src.cycles.length} survey waves (${cycleSpan}) had all 9 blood results, and their records were later linked to national death records, ` +
+    `so we know who died and when. The test: how often does the model correctly say which of two people died first? ` +
+    `This ranking score (Harrell's C-index) is 0.5 for a coin flip and 1.0 for perfect. Age alone already scores ` +
+    `${full.c_index_chrono_age.toFixed(3)} because age is the strongest single risk factor; PhenoAge scores ${full.c_index_phenoage.toFixed(3)}. ` +
+    `Among ${mid.n.toLocaleString('en-US')} people aged 50 to 65, where age alone says less, it lifts the score from ` +
+    `${mid.c_index_chrono_age.toFixed(3)} to ${mid.c_index_phenoage.toFixed(3)}.`;
 
   valMetricsListEl.innerHTML = `
     <div class="breakdown-row">
-      <dt>Cohort &amp; Follow-Up Window</dt>
+      <dt>Who was included and for how long</dt>
       <dd>
-        <strong>n = ${cohort.n.toLocaleString('en-US')}</strong> complete-case adults across cycles
+        <strong>${cohort.n.toLocaleString('en-US')}</strong> adults with every result available across cycles
         <code>${src.cycles.join(', ')}</code>; median follow-up <strong>${cohort.followup_median_years.toFixed(1)} years</strong>
         (${cohort.followup_median_months.toFixed(0)} months, max ${cohort.followup_max_months} months) through Dec 31, 2019;
         <strong>${cohort.deaths_all_followup.toLocaleString('en-US')}</strong> observed all-cause deaths
@@ -249,29 +253,29 @@ function renderNhanesValidation() {
       </dd>
     </div>
     <div class="breakdown-row">
-      <dt>Harrell's C-Index (Full Follow-Up)</dt>
+      <dt>Ranking score, full follow-up (Harrell's C-index)</dt>
       <dd>
         PhenoAge <strong>${full.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age alone
         <strong>${full.c_index_chrono_age.toFixed(4)}</strong>
-        (<strong>+${full.c_index_delta.toFixed(4)}</strong> concordance gain).
+        (<strong>+${full.c_index_delta.toFixed(4)}</strong> better at ranking who died first).
       </dd>
     </div>
     <div class="breakdown-row">
-      <dt>Harrell's C-Index (10-Year Window)</dt>
+      <dt>Ranking score, first 10 years only</dt>
       <dd>
-        Censored at 120 months: PhenoAge <strong>${ten.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age
+        Counting only deaths in the first 120 months: PhenoAge <strong>${ten.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age
         <strong>${ten.c_index_chrono_age.toFixed(4)}</strong> (<strong>+${ten.c_index_delta.toFixed(4)}</strong>).
       </dd>
     </div>
     <div class="breakdown-row">
-      <dt>Mid-Life Subgroup (Ages 50-65, n = ${mid.n.toLocaleString('en-US')}, ${mid.deaths.toLocaleString('en-US')} deaths)</dt>
+      <dt>Ages 50 to 65 only (${mid.n.toLocaleString('en-US')} people, ${mid.deaths.toLocaleString('en-US')} deaths)</dt>
       <dd>
         PhenoAge achieves C-index <strong>${mid.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age
         <strong>${mid.c_index_chrono_age.toFixed(4)}</strong> (<strong>+${mid.c_index_delta.toFixed(4)}</strong>).
       </dd>
     </div>
     <div class="breakdown-row">
-      <dt>Analytical Biomarker Sensitivity</dt>
+      <dt>How much one result moves your biological age</dt>
       <dd>
         <code>d(PhenoAge) / dx_j = beta_j / 0.090165</code>: <code>+1%</code> RDW adds
         <code>+3.67</code> yrs, <code>+1 mmol/L</code> glucose adds <code>+2.17</code> yrs, and
@@ -281,7 +285,7 @@ function renderNhanesValidation() {
   `;
 
   valTableCaptionEl.textContent =
-    `${src.survey} (${cycleSpan}), ${src.mortality_linkage}. Every cycle independently shows higher mortality concordance for PhenoAge than chronological age alone.`;
+    `${src.survey} (${cycleSpan}), ${src.mortality_linkage}. In every survey wave, PhenoAge ranked who died sooner better than age alone.`;
 
   valCycleTbodyEl.innerHTML = byCycle
     .map(
@@ -303,9 +307,9 @@ function renderNhanesValidation() {
 function renderPresets() {
   presetGridEl.innerHTML = '';
   const shortDesc = {
-    optimal: 'Low inflammation, tight glycemia, high albumin.',
-    average: 'Mid-life adult inside standard clinical intervals.',
-    elevated: 'Elevated glucose, hs-CRP, RDW, and leukocytes.',
+    optimal: 'Low inflammation, steady blood sugar, strong blood protein.',
+    average: 'A typical mid-life adult, every result inside the normal lab range.',
+    elevated: 'Higher blood sugar, inflammation, RDW and white cells.',
   };
 
   for (const preset of Object.values(PRESETS)) {
@@ -352,9 +356,10 @@ function buildBiomarkerControls() {
     card.innerHTML = `
       <div class="biomarker-top">
         <div class="bm-title-group">
-          <span class="bm-name">${bm.shortName}</span>
+          <span class="bm-name">${bm.name}</span>
           <span class="bm-status ${status.code}" data-role="status">${status.label}</span>
         </div>
+        <p class="bm-plain">${bm.plain || ''}</p>
         <div class="bm-input-group">
           <input
             type="number"
@@ -384,7 +389,7 @@ function buildBiomarkerControls() {
       </div>
       <div class="slider-scale">
         <span>${formatBiomarkerValue(bm, bm.min, state.unitSystem)}</span>
-        <span class="slider-opt-label">Opt: ${optDisp} ${unit}</span>
+        <span class="slider-opt-label">Target: ${optDisp} ${unit}</span>
         <span>${formatBiomarkerValue(bm, bm.max, state.unitSystem)}</span>
       </div>
     `;
@@ -517,22 +522,22 @@ function renderSurvivalSvg(currentRes, optimizerPlan) {
 
 function renderOptimizer(optimizerPlan) {
   const tgt = state.targetDropYears;
-  optimizerHeadingEl.textContent = `Exact 3 Marker Shifts to Drop ${tgt} Biological ${tgt === 1 ? 'Year' : 'Years'}`;
+  optimizerHeadingEl.textContent = `The 3 smallest changes that take ${tgt} ${tgt === 1 ? 'year' : 'years'} off`;
 
   if (optimizerPlan.alreadyOptimal || optimizerPlan.shifts.length === 0) {
-    optimizerSummaryEl.innerHTML = `Your biomarkers are already at Medicine 3.0 optimal targets. PhenoAge is <strong>${optimizerPlan.basePhenoAge.toFixed(1)} yrs</strong>.`;
+    optimizerSummaryEl.innerHTML = `Your results are already on target. Biological age is <strong>${optimizerPlan.basePhenoAge.toFixed(1)} yrs</strong>.`;
     optimizerShiftsEl.innerHTML = `
       <div class="optimizer-empty">
-        All 9 markers are at or better than optimal targets — zero modifiable biological years remaining.
+        All 9 results are at or better than target, so there are no more years to take off.
       </div>
     `;
     btnApplyOptimizer.disabled = true;
   } else {
     const capNote = optimizerPlan.isFullyAchievable
       ? ''
-      : ` (max achievable within optimal targets)`;
+      : ` (the most possible while staying within targets)`;
     optimizerSummaryEl.innerHTML =
-      `Moves PhenoAge from <strong>${optimizerPlan.basePhenoAge.toFixed(1)}</strong> to ` +
+      `Takes your biological age from <strong>${optimizerPlan.basePhenoAge.toFixed(1)}</strong> to ` +
       `<strong>${optimizerPlan.projectedPhenoAge.toFixed(1)} yrs</strong> ` +
       `(<strong>-${optimizerPlan.achievedDropYears.toFixed(2)} yrs</strong>${capNote}).`;
 
@@ -563,7 +568,7 @@ function renderTornado() {
   const tornado = computeTornadoLeverage(state.inputs);
   const maxReduction = Math.max(0.5, ...tornado.items.map((i) => i.reductionYears));
 
-  tornadoTotalPillEl.textContent = `Gain: -${tornado.totalModifiableYears.toFixed(1)} yrs`;
+  tornadoTotalPillEl.textContent = `Total: -${tornado.totalModifiableYears.toFixed(1)} yrs`;
   tornadoChartEl.innerHTML = '';
 
   tornado.items.forEach((item, index) => {
@@ -578,8 +583,8 @@ function renderTornado() {
     row.className = `tornado-row${item.isAlreadyOptimal ? ' is-optimal' : ''}`;
     row.disabled = item.isAlreadyOptimal;
     row.title = item.isAlreadyOptimal
-      ? `${item.name} is already at or better than optimal target`
-      : `Click to set ${item.name} to optimal target (${tgtFmt} ${unit})`;
+      ? `${item.name} is already at or better than target`
+      : `Click to set ${item.name} to its target (${tgtFmt} ${unit})`;
 
     row.innerHTML = `
       <div class="tornado-row-head">
@@ -588,7 +593,7 @@ function renderTornado() {
           <span class="tornado-name">${item.shortName}</span>
         </div>
         <span class="tornado-delta${item.isAlreadyOptimal ? ' zero' : ''}">
-          ${item.isAlreadyOptimal ? 'Optimal' : `-${item.reductionYears.toFixed(2)} yrs`}
+          ${item.isAlreadyOptimal ? 'On target' : `-${item.reductionYears.toFixed(2)} yrs`}
         </span>
       </div>
       <div class="tornado-bar-track">
@@ -599,7 +604,7 @@ function renderTornado() {
         <span>${
           item.isAlreadyOptimal
             ? 'Target met'
-            : `10-yr M -${item.mortalityDeltaPct.toFixed(2)} pp`
+            : `10-yr risk -${item.mortalityDeltaPct.toFixed(2)} pts`
         }</span>
       </div>
     `;
@@ -682,7 +687,7 @@ function renderPrintSummary(res, optimizerPlan) {
 
   const planBlock =
     optimizerPlan.alreadyOptimal || optimizerPlan.shifts.length === 0
-      ? `<p>All 9 biomarkers are already at or near Medicine 3.0 optimal targets.</p>`
+      ? `<p>All 9 biomarkers are already at or near longevity targets.</p>`
       : `<p>Projected PhenoAge: <strong>${optimizerPlan.projectedPhenoAge.toFixed(1)} yrs</strong> (-${optimizerPlan.achievedDropYears.toFixed(2)} yrs; 10-yr mortality ${(optimizerPlan.projectedMortality10Yr * 100).toFixed(2)}%).</p>
          <table class="print-table">
            <thead><tr><th>Priority</th><th>Biomarker</th><th>Current</th><th>Target Shift</th><th>Impact</th></tr></thead>
@@ -736,21 +741,21 @@ function renderOutputs() {
   if (res.ageAcceleration <= -2.0) {
     outAccelEl.className = 'kpi-stat-value positive-good';
     outAccelBadgeEl.className = 'kpi-badge good';
-    outAccelBadgeEl.textContent = 'Decelerated Aging';
+    outAccelBadgeEl.textContent = 'Aging slower';
   } else if (res.ageAcceleration <= 2.0) {
     outAccelEl.className = 'kpi-stat-value neutral-warn';
     outAccelBadgeEl.className = 'kpi-badge warn';
-    outAccelBadgeEl.textContent = 'Near Baseline';
+    outAccelBadgeEl.textContent = 'Aging on pace';
   } else {
     outAccelEl.className = 'kpi-stat-value negative-risk';
     outAccelBadgeEl.className = 'kpi-badge risk';
-    outAccelBadgeEl.textContent = 'Accelerated Aging';
+    outAccelBadgeEl.textContent = 'Aging faster';
   }
 
   const mortPct = res.mortality10Yr * 100;
   const mortRefPct = res.mortality10YrRef * 100;
   outMortalityEl.textContent = `${mortPct.toFixed(2)}%`;
-  outMortalityRefEl.textContent = `Ref: ${mortRefPct.toFixed(2)}%`;
+  outMortalityRefEl.textContent = `Typical for your age: ${mortRefPct.toFixed(2)}%`;
 
   outHrEl.textContent = `${res.hazardRatioVsBaseline.toFixed(2)}x`;
   outHrEl.className =
