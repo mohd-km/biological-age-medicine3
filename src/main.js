@@ -630,7 +630,7 @@ function renderAuditTable(res) {
       coef: MODEL_CONSTANTS.INTERCEPT.toFixed(4),
       input: '1',
       contrib: res.terms.intercept.toFixed(4),
-      mech: 'Baseline Gompertz log-hazard anchor fitted by Levine et al. (2018) on NHANES III.',
+      mech: 'Starting point of the risk score, fitted by Levine et al. (2018) on the US health survey (NHANES III).',
     },
     {
       label: 'Chronological Age',
@@ -638,7 +638,7 @@ function renderAuditTable(res) {
       coef: `+${AGE_COEF.toFixed(4)}`,
       input: `${state.inputs.age.toFixed(0)}`,
       contrib: `${res.terms.age >= 0 ? '+' : ''}${res.terms.age.toFixed(4)}`,
-      mech: 'Time-dependent exponential mortality drift.',
+      mech: 'Risk of dying rises exponentially with every year of age.',
     },
     ...BIOMARKERS.map((bm) => {
       const val = state.inputs[bm.key];

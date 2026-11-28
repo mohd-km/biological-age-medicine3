@@ -86,7 +86,7 @@
       <main class="main-content">
         <section class="story-card" aria-label="What this page does">
           <p><span class="story-k">The problem</span>Two people can both be 45 yet be aging at very different speeds. A birthday cannot show that; a routine blood test can.</p>
-          <p><span class="story-k">How it works</span>PhenoAge is a published formula (Levine et al., 2018) that turns 9 routine blood results plus your age into a "biological age": the age at which an average person has the same risk of dying in the next 10 years as you. Model card: a Gompertz survival model trained on a large US health survey. In our own check on 28,316 US adults followed for a median of 13 years, it picked who died sooner better than age alone (details below).</p>
+          <p><span class="story-k">How it works</span>PhenoAge is a published formula (Levine et al., 2018) that turns 9 routine blood results plus your age into a "biological age": the age at which an average person has the same risk of dying in the next 10 years as you. Model card: a survival model (Gompertz: the risk of dying rises exponentially with age) trained on a large US health survey. In our own check on 28,316 US adults followed for a median of 13 years, it picked who died sooner better than age alone (details below).</p>
           <p class="story-try"><span class="story-k">Try this first</span>Click "Elevated Metabolic Risk" just below: at the same age of 45, biological age jumps from 43.1 to 62.4 and the 10-year risk of dying rises from 2.50% to 13.48%.</p>
         </section>
 
@@ -288,7 +288,7 @@
               </p>
               <p class="drawer-note">
                 <strong>Model attribution:</strong> All ten PhenoAge Gompertz coefficients were derived and trained by
-                Levine et al. (2018, <em>Aging</em> 10(4):573-591,
+                Levine et al. (2018, Aging 10(4):573-591,
                 <a href="https://doi.org/10.18632/aging.101414" target="_blank" rel="noopener noreferrer">doi:10.18632/aging.101414</a>)
                 on NHANES III/IV. This calculator runs their exact published equations unmodified, verified by automated unit tests.
               </p>
@@ -362,7 +362,7 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
             <summary class="drawer-summary">
               <div class="drawer-summary-left">
                 <span class="section-kicker">Checked against real people</span>
-                <span class="drawer-title">Tested on 28,316 US adults followed for years (CDC NHANES 1999-2010)</span>
+                <span class="drawer-title">Tested on 28,316 US adults followed for years (US National Health and Nutrition Examination Survey, NHANES, 1999-2010)</span>
               </div>
               <div class="drawer-summary-right">
                 <span class="mono-pill">C-index 0.8645 vs 0.8484</span>
@@ -389,7 +389,7 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
                       national death-record linkage (NCHS 2019), using one short Python script anyone can rerun.
                     </p>
                     <ul class="github-meta-list">
-                      <li><code>analysis/nhanes_phenoage_validation.py</code> &mdash; exact Harrell's C-index on CDC XPT + NCHS mortality files</li>
+                      <li><code>analysis/nhanes_phenoage_validation.py</code> &mdash; exact ranking score (Harrell's C-index) on the CDC survey data files and National Center for Health Statistics death records</li>
                       <li><code>src/data/nhanes_validation_results.json</code> &mdash; committed build-time validation data</li>
                       <li>The formula on this page matches the analysis script to 9 decimal places, checked by automated tests</li>
                     </ul>
@@ -436,19 +436,19 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
                   <li>
                     Levine ME, Lu AT, Quach A, Chen BH, Assimes TL, Bandinelli S, Hou L, Baccarelli AA,
                     Stewart JD, Li Y, Whitsel EA, Wilson JG, Reiner AP, Aviv A, Lohman K, Liu Y,
-                    Ferrucci L, Horvath S. <em>An epigenetic biomarker of aging for lifespan and healthspan.</em>
+                    Ferrucci L, Horvath S. An epigenetic biomarker of aging for lifespan and healthspan.
                     Aging (Albany NY). 2018;10(4):573-591.
                     <a href="https://doi.org/10.18632/aging.101414" target="_blank" rel="noopener noreferrer">doi:10.18632/aging.101414</a>
                   </li>
                   <li>
                     Liu Z, Kuo PL, Horvath S, Crimmins E, Ferrucci L, Levine M.
-                    <em>A new aging measure captures morbidity and mortality risk across diverse subpopulations from NHANES IV: A cohort study.</em>
+                    A new aging measure captures morbidity and mortality risk across diverse subpopulations from NHANES IV: A cohort study.
                     PLOS Medicine. 2018;15(12):e1002718.
                     <a href="https://doi.org/10.1371/journal.pmed.1002718" target="_blank" rel="noopener noreferrer">doi:10.1371/journal.pmed.1002718</a>
                   </li>
                   <li>
                     Centers for Disease Control and Prevention (CDC), National Center for Health Statistics (NCHS).
-                    <em>Continuous NHANES (1999-2010) Laboratory &amp; Demographic Data Files and 2019 Public-Use Linked Mortality Files.</em>
+                    Continuous NHANES (1999-2010) Laboratory &amp; Demographic Data Files and 2019 Public-Use Linked Mortality Files.
                     U.S. Department of Health and Human Services.
                   </li>
                 </ol>
