@@ -2,7 +2,7 @@
   "name": "biological-age-model",
   "version": "2.0.0",
   "private": true,
-  "description": "Biological Age & Medicine 3.0 Survival Model by Mohammed KM — Client-side Levine et al. (2018) PhenoAge Gompertz proportional-hazards calculator.",
+  "description": "Biological Age & Medicine 3.0 Survival Model by Mohammed KM: the Levine et al. (2018) PhenoAge Gompertz proportional-hazards calculator, run in the browser.",
   "type": "module",
   "scripts": {
     "dev": "vite",

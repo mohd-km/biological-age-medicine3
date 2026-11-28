@@ -6,26 +6,26 @@
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=2" />
     <link rel="icon" href="/favicon.ico?v=2" sizes="any" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
-    <title>Biological Age &amp; Medicine 3.0 Survival Model — Mohammed KM</title>
+    <title>Biological Age &amp; Medicine 3.0 Survival Model · Mohammed KM</title>
     <meta
       name="description"
-      content="Interactive client-side implementation of the Levine et al. (2018) PhenoAge Gompertz survival model, paired with an independent CDC NHANES 1999-2010 mortality concordance validation (n = 28,316) by Mohammed KM."
+      content="Turn 9 routine blood results into a biological age with the published Levine et al. (2018) PhenoAge Gompertz survival model, all in your browser. Checked on 28,316 US adults from CDC NHANES 1999-2010 with linked death records."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://bioage.mohammed-km.in/" />
-    <meta property="og:title" content="Biological Age &amp; Medicine 3.0 Survival Model — Mohammed KM" />
+    <meta property="og:title" content="Biological Age &amp; Medicine 3.0 Survival Model · Mohammed KM" />
     <meta
       property="og:description"
-      content="Exact Levine et al. (2018) PhenoAge Gompertz survival calculator with independent CDC NHANES 1999-2010 linked mortality validation (n = 28,316; Harrell's C-index 0.8645 vs 0.8484)."
+      content="The exact Levine et al. (2018) PhenoAge formula, run in your browser. On 28,316 NHANES 1999-2010 adults it ranked who died sooner better than age alone (Harrell's C-index 0.8645 vs 0.8484)."
     />
     <meta property="og:image" content="https://bioage.mohammed-km.in/og-card.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Biological Age &amp; Medicine 3.0 Survival Model — Mohammed KM" />
+    <meta name="twitter:title" content="Biological Age &amp; Medicine 3.0 Survival Model · Mohammed KM" />
     <meta
       name="twitter:description"
-      content="Exact Levine et al. (2018) PhenoAge Gompertz survival calculator with independent CDC NHANES 1999-2010 mortality validation (n = 28,316)."
+      content="The exact Levine et al. (2018) PhenoAge formula, run in your browser and checked on 28,316 NHANES 1999-2010 adults with linked death records."
     />
     <meta name="twitter:image" content="https://bioage.mohammed-km.in/og-card.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -71,8 +71,8 @@
             <div class="masthead-heading-copy">
               <h1>Biological Age &amp; Medicine 3.0 Survival Model</h1>
               <p class="subtitle">
-                How old does your body look from a routine blood test? Move the sliders to see your biological age,
-                which results matter most, and what small changes would do.
+                A routine blood test says more about how fast you are ageing than your birthday does. Move the sliders
+                to see your biological age, which results move it most, and what a few small changes would do.
               </p>
             </div>
           </div>
@@ -85,9 +85,9 @@
 
       <main class="main-content">
         <section class="story-card" aria-label="What this page does">
-          <p><span class="story-k">The problem</span>Two people can both be 45 yet be aging at very different speeds. A birthday cannot show that; a routine blood test can.</p>
-          <p><span class="story-k">How it works</span>PhenoAge is a published formula (Levine et al., 2018) that turns 9 routine blood results plus your age into a "biological age": the age at which an average person has the same risk of dying in the next 10 years as you. Model card: a survival model (Gompertz: the risk of dying rises exponentially with age) trained on a large US health survey. In our own check on 28,316 US adults followed for a median of 13 years, it picked who died sooner better than age alone (details below).</p>
-          <p class="story-try"><span class="story-k">Try this first</span>Click "Elevated Metabolic Risk" just below: at the same age of 45, biological age jumps from 43.1 to 62.4 and the 10-year risk of dying rises from 2.50% to 13.48%.</p>
+          <p><span class="story-k">The problem</span>Two people can both be 45 and still be ageing at very different speeds. A birthday cannot show the difference. A routine blood test can.</p>
+          <p><span class="story-k">How it works</span>PhenoAge is a published formula (Levine et al., 2018). It turns 9 routine blood results plus your age into a "biological age", which is the age at which an average person carries the same risk of dying in the next 10 years as you do. Model card: a Gompertz survival model (the risk of dying rises exponentially with age), fitted on a large US health survey. I checked it on 28,316 US adults followed for a median of 13 years, and it picked who died sooner better than age alone (details below).</p>
+          <p class="story-try"><span class="story-k">Try this first</span>Click "Elevated Metabolic Risk" just below. The age stays at 45, yet biological age jumps from 43.1 to 62.4 and the 10-year risk of dying goes from 2.50% to 13.48%.</p>
         </section>
 
         <!-- Compact Preset Strip -->
@@ -166,7 +166,7 @@
               </div>
 
               <p class="optimizer-summary" id="optimizer-summary">
-                Finding the smallest changes across your 3 most powerful results...
+                Finding the smallest changes across the 3 results that move your age most...
               </p>
 
               <div class="optimizer-shifts" id="optimizer-shifts"></div>
@@ -190,7 +190,7 @@
         </section>
 
         <!-- Main Playable Workspace: 9 Biomarker Sliders + Modifiable Leverage -->
-        <section class="workspace-grid" aria-label="Biomarker Sliders and Modifiable Leverage">
+        <section class="workspace-grid" aria-label="Blood result sliders and the years each one can take off">
           <!-- Left: Chronological Age & 9 Biomarkers -->
           <div class="card biomarkers-panel">
             <div class="panel-header compact">
@@ -258,7 +258,7 @@
               </div>
             </div>
             <p class="panel-intro">
-              Each bar shows how many biological years you would lose by moving just that one result to its target. Click a bar to try it.
+              Each bar shows how many biological years come off if you move only that one result to its target. Click a bar to try it.
             </p>
             <div class="tornado-chart" id="tornado-chart"></div>
           </div>
@@ -287,10 +287,10 @@
                 (3) That risk is turned back into the age at which an average person has the same risk. That age is your PhenoAge.
               </p>
               <p class="drawer-note">
-                <strong>Model attribution:</strong> All ten PhenoAge Gompertz coefficients were derived and trained by
+                <strong>Where the model comes from:</strong> all ten PhenoAge Gompertz coefficients were fitted by
                 Levine et al. (2018, Aging 10(4):573-591,
                 <a href="https://doi.org/10.18632/aging.101414" target="_blank" rel="noopener noreferrer">doi:10.18632/aging.101414</a>)
-                on NHANES III/IV. This calculator runs their exact published equations unmodified, verified by automated unit tests.
+                on NHANES III/IV. This page runs their published equations unchanged, and automated unit tests check that.
               </p>
 
               <div class="formula-grid">
@@ -349,9 +349,9 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
               </div>
 
               <div class="medicine30-note">
-                <strong>Why "normal" is not the same as "target":</strong> a lab's normal range simply covers the middle 95% of people,
-                many of whom are already aging badly. Inside that range, small rises in blood sugar, RDW, CRP and white cells still
-                multiply risk, years before any disease is diagnosed. The targets here follow the prevention-first approach
+                <strong>Why "normal" is not the same as "target":</strong> a lab's normal range covers the middle 95% of people,
+                and many of them are already ageing badly. Inside that range, small rises in blood sugar, RDW, CRP and white cells
+                still multiply risk years before any disease is diagnosed. Hence the targets here follow the prevention-first approach
                 sometimes called Medicine 3.0.
               </div>
             </div>
@@ -385,12 +385,12 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
                     <div class="section-kicker">Check it yourself</div>
                     <h3>The analysis code and its results</h3>
                     <p class="github-inspect-copy">
-                      Every number here comes straight from the public CDC NHANES lab files and the
-                      national death-record linkage (NCHS 2019), using one short Python script anyone can rerun.
+                      Every number here comes from the public CDC NHANES lab files and the national
+                      death-record linkage (NCHS 2019). One short Python script produces all of it, and anyone can rerun it.
                     </p>
                     <ul class="github-meta-list">
-                      <li><code>analysis/nhanes_phenoage_validation.py</code> &mdash; exact ranking score (Harrell's C-index) on the CDC survey data files and National Center for Health Statistics death records</li>
-                      <li><code>src/data/nhanes_validation_results.json</code> &mdash; committed build-time validation data</li>
+                      <li><code>analysis/nhanes_phenoage_validation.py</code>: computes the exact ranking score (Harrell's C-index) from the CDC survey files and National Center for Health Statistics death records</li>
+                      <li><code>src/data/nhanes_validation_results.json</code>: the script's output, read by this page at build time</li>
                       <li>The formula on this page matches the analysis script to 9 decimal places, checked by automated tests</li>
                     </ul>
                   </div>
@@ -410,7 +410,7 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
               <div class="drawer-subhead">
                 <h3>Results for each survey wave</h3>
                 <p class="table-caption" id="val-table-caption">
-                  Complete-case adults age &ge; 20 years linked to NCHS 2019 Public-Use Linked Mortality Files.
+                  Adults aged 20 and over with every result present, linked to the NCHS 2019 public-use death records.
                 </p>
               </div>
               <div class="table-wrap">
@@ -431,7 +431,7 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
               </div>
 
               <div class="citations-block">
-                <h3>Primary Scientific Sources &amp; Data Provenance</h3>
+                <h3>Sources and where the data comes from</h3>
                 <ol class="citations-list">
                   <li>
                     Levine ME, Lu AT, Quach A, Chen BH, Assimes TL, Bandinelli S, Hou L, Baccarelli AA,
@@ -463,10 +463,10 @@ Age Acceleration = PhenoAge - Chronological Age</pre>
 
       <footer class="site-footer">
         <div>
-          <strong>Biological Age &amp; Medicine 3.0 Survival Model</strong> &mdash; Built by Mohammed KM.
+          <strong>Biological Age &amp; Medicine 3.0 Survival Model</strong>. Built by Mohammed KM.
         </div>
         <div>
-          Formula by Levine et al. (2018). Independent NHANES validation by Mohammed KM. 100% client-side.
+          Formula by Levine et al. (2018). NHANES check by Mohammed KM. Runs fully in your browser.
         </div>
       </footer>
     </div>

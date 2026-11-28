@@ -184,7 +184,7 @@ export const BIOMARKERS = Object.freeze([
     fromUS: (v) => v,
     decimalsSI: 1,
     decimalsUS: 1,
-    rationale: 'Average red cell size; larger cells link to low B12 or folate and an ageing bone marrow.',
+    rationale: 'Average red cell size. Larger cells link to low B12 or folate and an ageing bone marrow.',
   },
   {
     key: 'rdw',
@@ -209,7 +209,7 @@ export const BIOMARKERS = Object.freeze([
     fromUS: (v) => v,
     decimalsSI: 1,
     decimalsUS: 1,
-    rationale: 'How uneven red cell sizes are; one of the strongest routine-lab predictors of dying from any cause.',
+    rationale: 'How uneven red cell sizes are. It is one of the strongest routine-lab predictors of dying from any cause.',
   },
   {
     key: 'alp',
@@ -270,7 +270,7 @@ export const PRESETS = Object.freeze({
     id: 'optimal',
     label: 'Optimal Longevity Profile',
     tag: 'Longevity targets',
-    description: 'Low systemic inflammation, tight fasting glycemia, high albumin reserve, and low erythrocyte heterogeneity.',
+    description: 'Low inflammation, steady fasting blood sugar, high albumin and evenly sized red cells.',
     values: {
       age: 45,
       albumin: 47.0,
@@ -288,7 +288,7 @@ export const PRESETS = Object.freeze({
     id: 'average',
     label: 'Average Adult',
     tag: 'Typical US adult',
-    description: 'Representative mid-life adult within standard clinical reference intervals across all 9 biomarkers.',
+    description: 'A typical mid-life adult with all 9 results inside the normal lab range.',
     values: {
       age: 45,
       albumin: 42.0,
@@ -305,8 +305,8 @@ export const PRESETS = Object.freeze({
   elevated: {
     id: 'elevated',
     label: 'Elevated Metabolic Risk',
-    tag: 'Faster aging signal',
-    description: 'Impaired fasting glucose, subclinical inflammation, elevated RDW and leukocytes, and reduced albumin.',
+    tag: 'Faster ageing signal',
+    description: 'High fasting blood sugar, low-grade inflammation, raised RDW and white cells, and low albumin.',
     values: {
       age: 45,
       albumin: 38.0,
@@ -603,8 +603,8 @@ export function generateDoctorSummaryMarkdown(inputs, result, optimizerPlan, uni
     `# Biological Age (PhenoAge) Discussion Summary`,
     ``,
     `- **Date:** ${today}`,
-    `- **Model:** Levine et al. (2018) PhenoAge Gompertz Proportional-Hazards Model (*Aging* 10(4):573-591, doi:10.18632/aging.101414)`,
-    `- **Privacy:** Computed 100% locally in browser; no values transmitted or stored.`,
+    `- **Model:** Levine et al. (2018) PhenoAge Gompertz proportional-hazards model (Aging 10(4):573-591, doi:10.18632/aging.101414)`,
+    `- **Privacy:** Computed in your browser. No values were sent or stored.`,
     `- **Unit System:** ${unitSystem}`,
     ``,
     `## Summary Outcomes`,
@@ -638,7 +638,7 @@ export function generateDoctorSummaryMarkdown(inputs, result, optimizerPlan, uni
 
   if (optimizerPlan.alreadyOptimal || optimizerPlan.shifts.length === 0) {
     lines.push(
-      `All 9 biomarkers are already at or near Medicine 3.0 optimal targets. No high-leverage shifts remain.`
+      `All 9 biomarkers are already at or near the Medicine 3.0 targets, so no single change takes meaningful years off.`
     );
   } else {
     lines.push(
@@ -658,7 +658,7 @@ export function generateDoctorSummaryMarkdown(inputs, result, optimizerPlan, uni
   lines.push(``);
   lines.push(`---`);
   lines.push(
-    `*Educational and research summary only. Not a medical device or clinical diagnosis. Discuss lab targets and any interventions with a licensed physician.*`
+    `Educational and research summary only. Not a medical device or a diagnosis. Discuss lab targets and any changes with a licensed doctor.`
   );
 
   return lines.join('\n');

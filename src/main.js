@@ -234,9 +234,9 @@ function renderNhanesValidation() {
   valSummaryLeadEl.textContent =
     `NHANES is a large US government health survey. ${cohort.n.toLocaleString('en-US')} adults aged ${cohort.age_min} to ${cohort.age_max} ` +
     `from ${src.cycles.length} survey waves (${cycleSpan}) had all 9 blood results, and their records were later linked to national death records, ` +
-    `so we know who died and when. The test: how often does the model correctly say which of two people died first? ` +
+    `so we know who died and when. The test takes two people at a time and asks how often the model says correctly which one died first. ` +
     `This ranking score (Harrell's C-index) is 0.5 for a coin flip and 1.0 for perfect. Age alone already scores ` +
-    `${full.c_index_chrono_age.toFixed(3)} because age is the strongest single risk factor; PhenoAge scores ${full.c_index_phenoage.toFixed(3)}. ` +
+    `${full.c_index_chrono_age.toFixed(3)}, because age is the strongest single risk factor. PhenoAge scores ${full.c_index_phenoage.toFixed(3)}. ` +
     `Among ${mid.n.toLocaleString('en-US')} people aged 50 to 65, where age alone says less, it lifts the score from ` +
     `${mid.c_index_chrono_age.toFixed(3)} to ${mid.c_index_phenoage.toFixed(3)}.`;
 
@@ -270,7 +270,7 @@ function renderNhanesValidation() {
     <div class="breakdown-row">
       <dt>Ages 50 to 65 only (${mid.n.toLocaleString('en-US')} people, ${mid.deaths.toLocaleString('en-US')} deaths)</dt>
       <dd>
-        PhenoAge achieves C-index <strong>${mid.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age
+        PhenoAge scores a C-index of <strong>${mid.c_index_phenoage.toFixed(4)}</strong> vs. Chronological Age
         <strong>${mid.c_index_chrono_age.toFixed(4)}</strong> (<strong>+${mid.c_index_delta.toFixed(4)}</strong>).
       </dd>
     </div>
@@ -307,7 +307,7 @@ function renderNhanesValidation() {
 function renderPresets() {
   presetGridEl.innerHTML = '';
   const shortDesc = {
-    optimal: 'Low inflammation, steady blood sugar, strong blood protein.',
+    optimal: 'Low inflammation, steady blood sugar, high blood protein (albumin).',
     average: 'A typical mid-life adult, every result inside the normal lab range.',
     elevated: 'Higher blood sugar, inflammation, RDW and white cells.',
   };
@@ -704,9 +704,9 @@ function renderPrintSummary(res, optimizerPlan) {
          </table>`;
 
   printDoctorSummaryEl.innerHTML = `
-    <h1>Biological Age (PhenoAge) Doctor Discussion Brief</h1>
+    <h1>Biological Age (PhenoAge): summary to discuss with your doctor</h1>
     <div class="print-meta">
-      Date: ${today} &middot; Unit System: ${state.unitSystem} &middot; Model: Levine et al. (2018) PhenoAge Gompertz Formula &middot; 100% Client-Side
+      Date: ${today} &middot; Unit System: ${state.unitSystem} &middot; Model: Levine et al. (2018) PhenoAge Gompertz formula &middot; computed in the browser
     </div>
     <h2>Summary Outcomes</h2>
     <table class="print-table">
@@ -724,7 +724,7 @@ function renderPrintSummary(res, optimizerPlan) {
     <h2>Private &ldquo;What-If&rdquo; 3-Marker Plan (-${state.targetDropYears} yr Target)</h2>
     ${planBlock}
     <div class="print-disclaimer">
-      Educational and research summary only. Implements Levine et al. (2018, Aging 10(4):573-591, doi:10.18632/aging.101414). Not a medical device or clinical diagnosis. Discuss lab targets with a licensed physician.
+      Educational and research summary only. Uses Levine et al. (2018, Aging 10(4):573-591, doi:10.18632/aging.101414). Not a medical device or a diagnosis. Discuss lab targets with a licensed doctor.
     </div>
   `;
 }
@@ -741,15 +741,15 @@ function renderOutputs() {
   if (res.ageAcceleration <= -2.0) {
     outAccelEl.className = 'kpi-stat-value positive-good';
     outAccelBadgeEl.className = 'kpi-badge good';
-    outAccelBadgeEl.textContent = 'Aging slower';
+    outAccelBadgeEl.textContent = 'Ageing slower';
   } else if (res.ageAcceleration <= 2.0) {
     outAccelEl.className = 'kpi-stat-value neutral-warn';
     outAccelBadgeEl.className = 'kpi-badge warn';
-    outAccelBadgeEl.textContent = 'Aging on pace';
+    outAccelBadgeEl.textContent = 'Ageing on pace';
   } else {
     outAccelEl.className = 'kpi-stat-value negative-risk';
     outAccelBadgeEl.className = 'kpi-badge risk';
-    outAccelBadgeEl.textContent = 'Aging faster';
+    outAccelBadgeEl.textContent = 'Ageing faster';
   }
 
   const mortPct = res.mortality10Yr * 100;
